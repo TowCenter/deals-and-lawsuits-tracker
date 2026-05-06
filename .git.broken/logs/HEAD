@@ -1,0 +1,4 @@
+0000000000000000000000000000000000000000 dd01793512aa4ac925ec7ef7759e5ee45347754d aisvarya <aisvarya@MacBook-Pro-1170.local> 1760995295 -0400	clone: from github.com:TowCenter/tow-design-system.git
+dd01793512aa4ac925ec7ef7759e5ee45347754d 3640a0ff357c71c03185c7d80a90686bf93565ba aisvarya <aisvarya@MacBook-Pro-1242.local> 1764783053 -0500	commit: Add table view, filters, and data updates for AI deals and lawsuits project
+3640a0ff357c71c03185c7d80a90686bf93565ba 21cbe1f3e276700d111fb847486ee2c37267823c aisvarya <aisvarya@MacBook-Pro-1242.local> 1764785193 -0500	commit: Configure static adapter and base path for deployment
+21cbe1f3e276700d111fb847486ee2c37267823c 466f3bd17be1fde23857e2f2fd9621e91599f6a4 aisvarya <aisvarya@MacBook-Pro-1242.local> 1764785262 -0500	commit: Update base path to /platform-timeline/ai-deals-lawsuits

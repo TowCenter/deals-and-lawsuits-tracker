@@ -1,0 +1,13 @@
+src/
+demo-app/
+.svelte-kit/
+build/
+node_modules/
+.DS_Store
+.env*
+!.env.example
+*.log
+.vscode/
+tsconfig.json
+svelte.config.js
+vite.config.js
