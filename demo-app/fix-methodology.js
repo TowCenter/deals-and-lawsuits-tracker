@@ -10,19 +10,19 @@ try {
     // Fix base path - replace dynamic calculation with hardcoded base
     content = content.replace(
         /base:\s*new URL\("\.",\s*location\)\.pathname\.slice\(0,\s*-1\)/g,
-        'base: "/ai-deals-lawsuits"'
+        'base: "/deals-and-lawsuits-tracker"'
     );
     
     // Fix relative modulepreload links to absolute paths
     content = content.replace(
         /href="\.\/_app\//g,
-        'href="/ai-deals-lawsuits/_app/'
+        'href="/deals-and-lawsuits-tracker/_app/'
     );
     
     // Fix relative import statements to absolute paths
     content = content.replace(
         /import\("\.\/_app\//g,
-        'import("/ai-deals-lawsuits/_app/'
+        'import("/deals-and-lawsuits-tracker/_app/'
     );
     
     writeFileSync(methodologyFile, content, 'utf-8');

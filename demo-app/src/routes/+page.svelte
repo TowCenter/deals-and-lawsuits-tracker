@@ -327,7 +327,7 @@
 
 <br><br>It is compiled by Tow Center as part of the <a href='https://towcenter.columbia.edu/news/platforms-and-publishers'>Platforms and Publishers project</a>.
 The tracker is updated at the beginning of each month. Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> with any feedback or suggestions about developments we may have missed.
-<br><br>Read our <a href='/ai-deals-lawsuits/methodology'>methodology</a> to learn more about how we collect and categorize this data."
+<br><br>Read our <a href='/deals-and-lawsuits-tracker/methodology'>methodology</a> to learn more about how we collect and categorize this data."
         />
         <div class="update-date-divider">
             <div class="divider-line"></div>

@@ -11,7 +11,7 @@ const config = {
 			strict: true
 		}),
 		paths: {
-			base: process.env.NODE_ENV === 'production' ? '/ai-deals-lawsuits' : ''
+			base: process.env.NODE_ENV === 'production' ? '/deals-and-lawsuits-tracker' : ''
 		}
 	}
 };
