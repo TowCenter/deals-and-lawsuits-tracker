@@ -82,6 +82,18 @@
 	});
 	let viewingRelatedTo = $state(null); // ID of the card whose related items we're viewing, or null for all
 
+	// Esc to dismiss the related view
+	$effect(() => {
+		if (viewingRelatedTo == null || typeof window === 'undefined') return;
+		const onKey = (e) => { if (e.key === 'Escape') viewAllCards(); };
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	});
+
+	function isSourceCard(row) {
+		return viewingRelatedTo != null && row.id === viewingRelatedTo;
+	}
+
 	// Create ID-to-row lookup map for efficient related card access
 	const idToRowMap = $derived.by(() => {
 		const map = new Map();
@@ -419,7 +431,7 @@
 	 * @returns {Object[]} Filtered and sorted data
 	 */
 	function getFilteredAndSorted() {
-		// If viewing related cards, filter to show the main card and its related cards
+		// If viewing related cards, filter to show the source + its related cards.
 		let dataToFilter = data;
 		if (viewingRelatedTo != null) {
 			const sourceRow = idToRowMap.get(viewingRelatedTo);
@@ -1081,7 +1093,21 @@
 	}
 </script>
 
-<div class="card-view">
+<div
+	class="card-view"
+	class:related-active={viewingRelatedTo != null}
+>
+	{#if viewingRelatedTo != null}
+		<div
+			class="related-backdrop"
+			onclick={viewAllCards}
+			role="button"
+			tabindex="-1"
+			aria-label="Dismiss related view"
+		></div>
+		<button class="related-tray-close" onclick={viewAllCards} title="Dismiss (Esc)" aria-label="Close related view">×</button>
+	{/if}
+
 	<div class="timeline-container">
 		{#each Object.entries(groupedData) as [monthYear, items]}
 			<div class="timeline-row">
@@ -1117,9 +1143,14 @@
 								return '';
 							})()
 							: ''}
-						<div class="card-wrapper" data-card-id={cardId}>
-			<div 
-				class="card {interactionType}" 
+						<div
+							class="card-wrapper"
+							class:is-source={isSourceCard(row)}
+							class:is-related={viewingRelatedTo != null && !isSourceCard(row)}
+							data-card-id={cardId}
+						>
+			<div
+				class="card {interactionType}"
 				class:collapsed={!isCardExpanded(cardId, row)}
 				class:has-multiple-interactions={interactionTypes.length > 1}
 				style={borderGradient ? `--border-gradient: ${borderGradient};` : ''}
@@ -2674,6 +2705,85 @@
 		.related-toggle-btn {
 			font-size: 0.8rem;
 			padding: 0.4rem 0.6rem;
+		}
+	}
+
+	/* ====================================================================
+	   Related-view: spotlight tray overlay
+	   ==================================================================== */
+
+	.related-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 900;
+		background: rgba(20, 24, 32, 0.28);
+		cursor: pointer;
+		animation: backdrop-fade 180ms ease-out;
+	}
+	@keyframes backdrop-fade {
+		from { opacity: 0; }
+		to   { opacity: 1; }
+	}
+
+	.related-tray-close {
+		position: fixed;
+		top: 14px;
+		right: 16px;
+		z-index: 1100;
+		background: #fff;
+		border: 1px solid #d4d4d4;
+		border-radius: 0;
+		width: 32px;
+		height: 32px;
+		font-size: 1.1rem;
+		line-height: 1;
+		color: #555;
+		cursor: pointer;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+		transition: background 0.15s ease, color 0.15s ease;
+	}
+	.related-tray-close:hover { background: #f3f3f3; color: #222; }
+
+	.card-view.related-active .timeline-container {
+		position: relative;
+		z-index: 1000;
+		max-width: 980px;
+		margin: 48px auto 64px;
+		background: #fff;
+		padding: 20px 24px 24px;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+		animation: tray-rise 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+	}
+	.card-view.related-active .timeline-container::before {
+		content: 'Related cluster';
+		display: block;
+		font-size: 0.7rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #999;
+		margin-bottom: 12px;
+		padding-bottom: 8px;
+		border-bottom: 1px solid #eee;
+	}
+	.card-view.related-active .card-wrapper.is-source .card {
+		box-shadow: 0 0 0 1px #254c6f, 0 2px 6px rgba(37, 76, 111, 0.08);
+	}
+	.card-view.related-active .card-wrapper.is-related .card {
+		box-shadow: 0 0 0 1px #d4dde6, 0 1px 3px rgba(0, 0, 0, 0.04);
+	}
+	@keyframes tray-rise {
+		from { opacity: 0; transform: translateY(8px); }
+		to   { opacity: 1; transform: translateY(0); }
+	}
+
+	@media (max-width: 600px) {
+		.card-view.related-active .timeline-container {
+			margin: 24px 8px 80px;
+			padding: 16px;
+		}
+		.related-tray-close {
+			top: 10px;
+			right: 10px;
 		}
 	}
 </style>
