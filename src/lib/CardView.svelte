@@ -1125,7 +1125,7 @@
 						{@const allSources = normalizeSources(row.sources)}
 						{@const aiCompany = Array.isArray(row.platform) && row.platform.length > 0 ? row.platform[0] : '—'}
 						{@const parentChildMatches = Array.isArray(row.parent_child_matches) ? row.parent_child_matches : []}
-						{@const orgsToDisplay = interactionType === 'lawsuit' && Array.isArray(row.plaintiff) && row.plaintiff.length > 0 ? row.plaintiff : allPublishers}
+						{@const orgsToDisplay = allPublishers}
 						{@const hierarchyTree = buildHierarchyTree(parentChildMatches, orgsToDisplay)}
 						{@const relatedCards = getRelatedCards(row)}
 						{@const borderColors = interactionTypes.map(t => {
@@ -1239,9 +1239,9 @@
 				</div>
 
 					<div class="card-field news-org-field">
-						<div class="field-label">{interactionType === 'lawsuit' ? 'Plaintiff(s)' : 'Publication(s)'}</div>
+						<div class="field-label">{interactionType === 'lawsuit' ? 'News Org(s)' : 'Publication(s)'}</div>
 						<div class="field-value">
-							{#each (interactionType === 'lawsuit' && Array.isArray(row.plaintiff) && row.plaintiff.length > 0 ? row.plaintiff : allPublishers) as org}
+							{#each allPublishers as org}
 								{@const orgTree = hierarchyTree[org] || {}}
 								{@const hasMatches = Object.keys(orgTree).length > 0 || (orgTree.publications && orgTree.publications.length > 0)}
 								<div class="publisher-item">
@@ -1284,7 +1284,7 @@
 					{/if}
 				</div>
 							{/each}
-							{#if (interactionType === 'lawsuit' && Array.isArray(row.plaintiff) && row.plaintiff.length > 0 ? row.plaintiff : allPublishers).some(org => {
+							{#if allPublishers.some(org => {
 								const orgTree = hierarchyTree[org] || {};
 								return Object.keys(orgTree).length > 0 || (orgTree.publications && orgTree.publications.length > 0);
 							})}
