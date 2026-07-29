@@ -1029,6 +1029,31 @@
 		return relatedCards;
 	}
 
+	/**
+	 * Names the related cards by what they are, not by what the source card is.
+	 * A lawsuit that ended in a deal links to a deal, so falling back to the
+	 * source's own type would mislabel it. Mixed types get the neutral noun.
+	 * @param {Object[]} relatedCards - Cards returned by getRelatedCards
+	 * @returns {string} Label such as 'Deal', 'Lawsuits' or 'Entries'
+	 */
+	function getRelatedCardsLabel(relatedCards) {
+		const types = new Set();
+		for (const card of relatedCards) {
+			for (const type of getInteractionTypes(card.interaction)) {
+				types.add(type);
+			}
+		}
+
+		const plural = relatedCards.length !== 1;
+		if (types.size !== 1) return plural ? 'Entries' : 'Entry';
+
+		const [type] = types;
+		const noun = type === INTERACTION_TYPES.LAWSUIT ? 'Lawsuit'
+			: type === INTERACTION_TYPES.GRANT ? 'Grant'
+			: 'Deal';
+		return plural ? `${noun}s` : noun;
+	}
+
 
 	function viewRelatedCards(rowId) {
 		viewingRelatedTo = rowId;
@@ -1349,7 +1374,6 @@
 								<!-- Related Cards Link -->
 								{#if relatedCards.length > 0}
 									{@const isInRelatedView = viewingRelatedTo != null && (viewingRelatedTo === row.id || isRelatedCardInFilteredView(row))}
-									{@const relatedInteractionLabel = interactionType === 'lawsuit' ? 'Lawsuit' : interactionType === 'grant' ? 'Grant' : 'Deal'}
 									<div class="related-cards-toggle">
 										{#if isInRelatedView}
 											<button 
@@ -1370,7 +1394,7 @@
 											>
 												<span class="related-toggle-icon">→</span>
 												<span class="related-toggle-text">
-													Related {relatedInteractionLabel} ({relatedCards.length})
+													Related {getRelatedCardsLabel(relatedCards)} ({relatedCards.length})
 												</span>
 											</button>
 										{/if}
