@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build && node fix-methodology.js",
+		"build:prod": "BASE_PATH=/ai-deals-lawsuits npm run build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"deploy": "npm run build",

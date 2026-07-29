@@ -31,10 +31,14 @@ jobs:
       - name: Install dependencies
         run: npm ci --prefix demo-app
 
+      # GitHub Pages serves a project site from /<repo-name>/, while the production
+      # site sits at /ai-deals-lawsuits. Asset URLs are absolute, so this preview
+      # build needs its own base path or every asset 404s.
       - name: Build SvelteKit app
         run: npm run build --prefix demo-app
         env:
           NODE_ENV: production
+          BASE_PATH: /deals-and-lawsuits-tracker
 
       - name: Add .nojekyll
         run: touch demo-app/build/.nojekyll

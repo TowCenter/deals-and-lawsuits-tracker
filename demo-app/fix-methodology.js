@@ -7,19 +7,13 @@ import { pathToFileURL } from 'url';
 // resolve against /<base>/methodology/ instead of the site root, so the page
 // loads with no JS or CSS. Rewrite them to absolute paths after every build.
 
-// This only ever post-processes a production build, but it runs as its own node
-// process and so doesn't inherit the NODE_ENV vite set for itself. Default to
-// production so we read the same base path the build was made with.
-process.env.NODE_ENV ??= 'production';
-
+// The base path comes from BASE_PATH, which this process inherits from the same
+// npm invocation that ran vite — so we read back exactly the base the build was
+// made with. An unset BASE_PATH is a site mounted at the root, which is a valid
+// target, not an error: the rewrites below then point at /_app/ directly.
 const configPath = join(process.cwd(), 'svelte.config.js');
 const { default: svelteConfig } = await import(pathToFileURL(configPath).href);
-const base = svelteConfig.kit?.paths?.base;
-
-if (!base) {
-	console.error(`Error: no kit.paths.base in ${configPath} — nothing to rewrite.`);
-	process.exit(1);
-}
+const base = svelteConfig.kit?.paths?.base ?? '';
 
 const methodologyFile = join(process.cwd(), 'build', 'methodology.html');
 
@@ -71,9 +65,11 @@ if (unmatched.length > 0) {
 	process.exit(1);
 }
 
+const target = base || '(site root)';
+
 if (replacements === 0) {
-	console.log(`✓ methodology.html already points at ${base} — no changes needed`);
+	console.log(`✓ methodology.html already points at ${target} — no changes needed`);
 } else {
 	writeFileSync(methodologyFile, content, 'utf-8');
-	console.log(`✓ Rewrote ${replacements} path${replacements === 1 ? '' : 's'} in methodology.html to ${base}`);
+	console.log(`✓ Rewrote ${replacements} path${replacements === 1 ? '' : 's'} in methodology.html to ${target}`);
 }

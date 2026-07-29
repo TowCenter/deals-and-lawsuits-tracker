@@ -10,8 +10,12 @@ const config = {
 			precompress: false,
 			strict: true
 		}),
+		// The same build is served from two different subdirectories: /ai-deals-lawsuits
+		// on the production site and /deals-and-lawsuits-tracker on the GitHub Pages
+		// preview. Asset URLs are absolute, so the base path has to be set per target
+		// at build time — see the build scripts in package.json.
 		paths: {
-			base: process.env.NODE_ENV === 'production' ? '/ai-deals-lawsuits' : ''
+			base: process.env.BASE_PATH ?? ''
 		}
 	}
 };
