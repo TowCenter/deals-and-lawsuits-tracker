@@ -118,27 +118,29 @@
 		return rowA.lawsuit_id === rowB.lawsuit_id && caseGroups.has(rowA.lawsuit_id);
 	}
 
-	// Which entry of a case is currently shown, keyed by lawsuit_id.
-	// Unset means "the most recent entry that survived filtering".
-	let selectedCaseEntry = $state(new Map());
-
-	function selectCaseEntry(caseId, entryId) {
-		const next = new Map(selectedCaseEntry);
-		next.set(caseId, entryId);
-		selectedCaseEntry = next;
+	/**
+	 * Every status this case has moved through, oldest first. The same chronology
+	 * shows on every card of the case, each marking its own step, so a reader who
+	 * lands on any single entry can see where it sits in the case.
+	 * @param {Object} row - Data row
+	 * @returns {Object[]} All entries of the case, or [] if it has only one
+	 */
+	function getStatusProgression(row) {
+		return getCaseEntries(row) || [];
 	}
 
-	/**
-	 * Resolves the entry a merged case card should display.
-	 * @param {Object[]|null} caseEntries - All entries of the case
-	 * @param {Object} row - The representative (most recent matching) row
-	 * @returns {Object} The entry to render
-	 */
-	function getActiveEntry(caseEntries, row) {
-		if (!caseEntries) return row;
-		const selectedId = selectedCaseEntry.get(row.lawsuit_id);
-		if (selectedId == null) return row;
-		return caseEntries.find(entry => entry.id === selectedId) || row;
+	// Reveals an earlier or later entry of the same case: expands it and brings it
+	// into view. Cards are already in the DOM, so this is a scroll, not a filter.
+	function goToCaseEntry(entryId) {
+		expandedCards = new Set([...expandedCards, entryId]);
+		if (typeof document === 'undefined') return;
+		requestAnimationFrame(() => {
+			const el = document.getElementById(`card-${entryId}`);
+			if (!el) return;
+			el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			el.classList.add('case-flash');
+			setTimeout(() => el.classList.remove('case-flash'), 1200);
+		});
 	}
 
 	/**
@@ -455,7 +457,7 @@
 				const bDate = parseDate(b.date || '');
 				return bDate.getTime() - aDate.getTime();
 			});
-			return collapseCaseEntries(sorted);
+			return sorted;
 		}
 		
 		const filtered = [];
@@ -497,29 +499,7 @@
 			return bDate.getTime() - aDate.getTime();
 		});
 
-		return collapseCaseEntries(filtered);
-	}
-
-	/**
-	 * Keeps one card per case. Rows arrive newest first, so the first entry seen
-	 * for a case is the most recent one that survived filtering — that entry
-	 * anchors the card, and the status track carries the rest of the history.
-	 * @param {Object[]} rows - Rows sorted newest first
-	 * @returns {Object[]} Rows with same-case duplicates removed
-	 */
-	function collapseCaseEntries(rows) {
-		if (caseGroups.size === 0) return rows;
-		const seenCases = new Set();
-		const collapsed = [];
-		for (const row of rows) {
-			const caseId = row.lawsuit_id;
-			if (caseId && caseGroups.has(caseId)) {
-				if (seenCases.has(caseId)) continue;
-				seenCases.add(caseId);
-			}
-			collapsed.push(row);
-		}
-		return collapsed;
+		return filtered;
 	}
 
 	let filteredData = $derived(getFilteredAndSorted());
@@ -1086,8 +1066,7 @@
 					{#each items as row (row.id)}
 			{@const interactionTypes = getInteractionTypes(row.interaction)}
 			{@const interactionType = getInteractionType(row.interaction)}
-						{@const caseEntries = getCaseEntries(row)}
-						{@const entry = getActiveEntry(caseEntries, row)}
+						{@const entry = row}
 						{@const allPublishers = Array.isArray(entry.organization_publisher_named_in_deal_suit) ? entry.organization_publisher_named_in_deal_suit : []}
 							{@const allSources = normalizeSources(entry.sources)}
 						{@const parentChildMatches = Array.isArray(entry.parent_child_matches) ? entry.parent_child_matches : []}
@@ -1114,6 +1093,7 @@
 							class:is-related={viewingRelatedTo != null && !isSourceCard(row)}
 						>
 			<div
+				id="card-{row.id}"
 				class="card {interactionType}"
 				class:collapsed={!isCardExpanded(row.id)}
 				class:has-multiple-interactions={interactionTypes.length > 1}
@@ -1186,31 +1166,6 @@
 									</div>
 								{/if}
 
-								<!-- Case history: every entry sharing this lawsuit_id, oldest first -->
-								{#if isCardExpanded(row.id) && caseEntries}
-									<div class="case-track" role="tablist" aria-label="Case history">
-										{#each caseEntries as caseEntry, stepIndex (caseEntry.id)}
-											{@const isActiveStep = caseEntry.id === entry.id}
-											<button
-												type="button"
-												class="case-step {getStatusClass(caseEntry.status)}"
-												role="tab"
-												aria-selected={isActiveStep}
-												onclick={(e) => { e.stopPropagation(); selectCaseEntry(row.lawsuit_id, caseEntry.id); }}
-											>
-												<span class="case-step-date">{formatDate(caseEntry.date)}</span>
-												<span class="case-step-status">{caseEntry.status || 'Filed'}</span>
-												<span class="case-step-rail">
-													<span class="case-step-dot"></span>
-													{#if stepIndex < caseEntries.length - 1}
-														<span class="case-step-line"></span>
-													{/if}
-												</span>
-											</button>
-										{/each}
-									</div>
-								{/if}
-
 								<!-- Two Column Layout -->
 								{#if isCardExpanded(row.id)}
 									<div class="card-content" onclick={(e) => handleCardContentClick(e, row.id)}>
@@ -1230,17 +1185,6 @@
 					{/if}
 								</div>
 				</div>
-
-					{#if caseEntries && Array.isArray(entry.plaintiff) && entry.plaintiff.length > 0}
-						<div class="card-field">
-							<div class="field-label">Plaintiff(s)</div>
-							<div class="field-value">
-								{#each entry.plaintiff as plaintiff}
-									<div class="field-item">{@html highlightText(plaintiff)}</div>
-								{/each}
-							</div>
-						</div>
-					{/if}
 
 					<div class="card-field news-org-field">
 						<div class="news-org-header">
@@ -1314,14 +1258,38 @@
 					</div>
 
 										{#if interactionType === 'lawsuit'}
-											{#if entry.status}
+											{@const progression = getStatusProgression(row)}
+											{#if entry.status || progression.length > 1}
 					<div class="card-field">
 													<div class="field-label">Status:</div>
 													<div class="field-value">
-														<span class="status-badge {getStatusClass(entry.status)}">
-															<span class="status-indicator"></span>
-															<span class="status-text">{@html highlightText(entry.status)}</span>
-														</span>
+														{#if progression.length > 1}
+															<!-- Same chronology on every card of the case; this card marks its own step -->
+															<ol class="status-chain">
+																{#each progression as step (step.id)}
+																	{@const isCurrentStep = step.id === row.id}
+																	<li class="status-chain-step {getStatusClass(step.status)}" class:current={isCurrentStep}>
+																		<span class="status-chain-dot"></span>
+																		{#if isCurrentStep}
+																			<span class="status-chain-label">{@html highlightText(step.status || 'Filed')}</span>
+																		{:else}
+																			<button
+																				type="button"
+																				class="status-chain-label status-chain-jump"
+																				title="Go to this update"
+																				onclick={(e) => { e.stopPropagation(); goToCaseEntry(step.id); }}
+																			>{@html highlightText(step.status || 'Filed')}</button>
+																		{/if}
+																		<span class="status-chain-date">{formatDate(step.date)}</span>
+																	</li>
+																{/each}
+															</ol>
+														{:else if entry.status}
+															<span class="status-badge {getStatusClass(entry.status)}">
+																<span class="status-indicator"></span>
+																<span class="status-text">{@html highlightText(entry.status)}</span>
+															</span>
+														{/if}
 					</div>
 												</div>
 											{/if}
@@ -1337,9 +1305,7 @@
 									<!-- Column 2 -->
 									<div class="card-column column-2">
 					<div class="card-field reported-details">
-						<div class="field-label">
-							{#if caseEntries}Reported Details — {formatDate(entry.date)}{:else}Reported Details{/if}
-						</div>
+						<div class="field-label">Reported Details</div>
 						<div class="field-value">
 							<span class="reported-text">
 							{@html highlightText(entry.reported_details || '—')}
@@ -1788,15 +1754,6 @@
 			font-size: 1rem;
 		}
 
-
-		.case-track {
-			padding: 0.75rem 2.5rem 0.75rem 0;
-		}
-
-		.case-step {
-			min-width: 7.5rem;
-			padding-right: 1.25rem;
-		}
 
 	}
 
@@ -2379,14 +2336,14 @@
 		flex-shrink: 0;
 	}
 
-	/* One colour per status, shared by the badge dot and the case-track dots.
+	/* One colour per status, shared by every badge in a progression chain.
 	   Adding a status means adding one line here and one case in getStatusClass. */
-	.status-badge.in-progress, .case-step.in-progress { --status-color: #ffb300; --status-glow: rgba(255, 179, 0, 0.2); }
-	.status-badge.settled, .case-step.settled { --status-color: #4caf50; --status-glow: rgba(76, 175, 80, 0.2); }
-	.status-badge.dismissed, .case-step.dismissed { --status-color: #9e9e9e; --status-glow: rgba(158, 158, 158, 0.2); }
-	.status-badge.decided, .case-step.decided { --status-color: #254c6f; --status-glow: rgba(37, 76, 111, 0.2); }
-	.status-badge.consolidated, .case-step.consolidated { --status-color: #8d6e63; --status-glow: rgba(141, 110, 99, 0.2); }
-	.status-badge.default, .case-step.default { --status-color: #666; --status-glow: rgba(102, 102, 102, 0.2); }
+	.status-badge.in-progress { --status-color: #ffb300; --status-glow: rgba(255, 179, 0, 0.2); }
+	.status-badge.settled { --status-color: #4caf50; --status-glow: rgba(76, 175, 80, 0.2); }
+	.status-badge.dismissed { --status-color: #9e9e9e; --status-glow: rgba(158, 158, 158, 0.2); }
+	.status-badge.decided { --status-color: #254c6f; --status-glow: rgba(37, 76, 111, 0.2); }
+	.status-badge.consolidated { --status-color: #8d6e63; --status-glow: rgba(141, 110, 99, 0.2); }
+	.status-badge.default { --status-color: #666; --status-glow: rgba(102, 102, 102, 0.2); }
 
 	.status-badge .status-indicator {
 		background-color: var(--status-color);
@@ -2400,88 +2357,109 @@
 
 
 
-	/* ===== Case history (rows sharing a lawsuit_id) ===== */
+	/* ===== Case progression (rows sharing a lawsuit_id) ===== */
 
-	.case-track {
-		border-bottom: 1px solid #e0e0e0;
-		background-color: #fbfafa;
+	/* Newest entry: the chain of statuses the case has moved through.
+	   Stacked rather than inline — chained chips wrapped mid-sequence and left
+	   arrows stranded at the start of a line. */
+	.status-chain {
+		list-style: none;
+		margin: 0;
+		padding: 0;
 		display: flex;
-		align-items: stretch;
-		overflow-x: auto;
-		/* Right gutter keeps the last step clear of the collapse control */
-		padding: 0.85rem 2.75rem 0.8rem 1.2rem;
-		gap: 0;
+		flex-direction: column;
+		gap: 0.45rem;
 	}
 
-	.case-step {
-		flex: 1 1 0;
-		min-width: 8.5rem;
+	.status-chain-step {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		align-items: baseline;
+		column-gap: 0.5rem;
+		position: relative;
+	}
+
+	/* Rail joining one status to the next, standing in for the arrows */
+	.status-chain-step:not(:last-child)::before {
+		content: '';
+		position: absolute;
+		left: 3px;
+		top: 1.05em;
+		height: calc(100% - 0.5em);
+		border-left: 1px solid #dcdcdc;
+	}
+
+	.status-chain-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background-color: var(--status-color, #bdbdbd);
+		/* Baseline alignment nudges the dot onto the text's optical centre */
+		transform: translateY(-0.15em);
+	}
+
+	.status-chain-label {
+		font-size: 0.8rem;
+		color: #777;
+		line-height: 1.3;
+		text-align: left;
+	}
+
+	/* The step this card is */
+	.status-chain-step.current .status-chain-label {
+		color: #1a1a1a;
+		font-weight: 600;
+	}
+
+	.status-chain-step.current .status-chain-dot {
+		box-shadow: 0 0 0 3px var(--status-glow, rgba(102, 102, 102, 0.2));
+	}
+
+	.status-chain-step.current .status-chain-date {
+		color: #555;
+	}
+
+	/* Other steps jump to that card */
+	.status-chain-jump {
+		padding: 0;
 		background: none;
 		border: none;
-		padding: 0.4rem 1.8rem 0.5rem 0;
-		text-align: left;
 		font-family: inherit;
-		color: #777;
 		cursor: pointer;
-		transition: color 0.15s ease;
+		text-decoration: underline;
+		text-decoration-color: #d5d5d5;
+		text-underline-offset: 2px;
 	}
 
-	.case-step:last-child {
-		padding-right: 0;
+	.status-chain-jump:hover {
+		color: #DE5A35;
+		text-decoration-color: currentColor;
 	}
 
-	.case-step:hover {
-		color: #333;
-	}
-
-	.case-step:focus-visible {
+	.status-chain-jump:focus-visible {
 		outline: 2px solid #DE5A35;
 		outline-offset: 2px;
 	}
 
-	.case-step[aria-selected='true'] {
-		color: #1a1a1a;
-	}
-
-	.case-step-date {
-		display: block;
-		font-size: 0.65rem;
+	.status-chain-date {
+		font-size: 0.68rem;
 		font-variant-numeric: tabular-nums;
-		color: inherit;
-		opacity: 0.85;
+		color: #888;
+		white-space: nowrap;
 	}
 
-	.case-step-status {
-		display: block;
-		font-size: 0.82rem;
-		font-weight: 600;
-		margin-top: 0.15rem;
-		line-height: 1.3;
+	/* Brief highlight when a card is jumped to from its sibling entry */
+	:global(.card.case-flash) {
+		animation: case-flash 1.2s ease-out;
 	}
 
-	.case-step-rail {
-		display: flex;
-		align-items: center;
-		gap: 0.35rem;
-		margin-top: 0.45rem;
+	@keyframes case-flash {
+		0%, 40% { box-shadow: 0 0 0 3px rgba(222, 90, 53, 0.45); }
+		100% { box-shadow: 0 0 0 3px rgba(222, 90, 53, 0); }
 	}
 
-	.case-step-dot {
-		width: 9px;
-		height: 9px;
-		border-radius: 50%;
-		background-color: var(--status-color, #bdbdbd);
-		flex-shrink: 0;
-	}
-
-	.case-step-line {
-		height: 1px;
-		background-color: #d8d8d8;
-		flex: 1;
-	}
-
-	.case-step[aria-selected='true'] .case-step-dot {
-		box-shadow: 0 0 0 3px rgba(222, 90, 53, 0.25);
+	@media (prefers-reduced-motion: reduce) {
+		:global(.card.case-flash) { animation: none; }
 	}
 
 
