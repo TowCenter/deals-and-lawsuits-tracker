@@ -2396,11 +2396,13 @@
 		border-left: 1px solid #dcdcdc;
 	}
 
+	/* Neutral by default — only the step this card is gets its status colour, so
+	   the colour marks where you are rather than repeating down the whole chain. */
 	.status-chain-dot {
 		width: 7px;
 		height: 7px;
 		border-radius: 50%;
-		background-color: var(--status-color, #bdbdbd);
+		background-color: #cfcfcf;
 		/* Baseline alignment nudges the dot onto the text's optical centre */
 		transform: translateY(-0.15em);
 	}
@@ -2419,6 +2421,7 @@
 	}
 
 	.status-chain-step.current .status-chain-dot {
+		background-color: var(--status-color, #666);
 		box-shadow: 0 0 0 3px var(--status-glow, rgba(102, 102, 102, 0.2));
 	}
 
