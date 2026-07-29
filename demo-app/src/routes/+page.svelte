@@ -93,23 +93,25 @@
         
         return rawDataArray.map((row, index) => {
             try {
-                // Normalize related_ids - handle both array and null/undefined
-                let relatedIds = null;
-                if (row?.related_ids !== null && row?.related_ids !== undefined) {
-                    if (Array.isArray(row.related_ids)) {
-                        relatedIds = row.related_ids.filter(id => id != null);
-                    } else if (typeof row.related_ids === 'string') {
+                // Normalize linked_entry_ids - handle both array and null/undefined.
+                // This is the curated link set; related_ids fans out to the whole
+                // cluster and is not what the tray shows.
+                let linkedEntryIds = null;
+                if (row?.linked_entry_ids !== null && row?.linked_entry_ids !== undefined) {
+                    if (Array.isArray(row.linked_entry_ids)) {
+                        linkedEntryIds = row.linked_entry_ids.filter(id => id != null);
+                    } else if (typeof row.linked_entry_ids === 'string') {
                         // Handle comma-separated string
-                        relatedIds = row.related_ids.split(',').map(id => {
+                        linkedEntryIds = row.linked_entry_ids.split(',').map(id => {
                             const num = parseInt(id.trim(), 10);
                             return isNaN(num) ? null : num;
                         }).filter(id => id != null);
                     } else {
-                        const num = parseInt(row.related_ids, 10);
-                        relatedIds = isNaN(num) ? null : [num];
+                        const num = parseInt(row.linked_entry_ids, 10);
+                        linkedEntryIds = isNaN(num) ? null : [num];
                     }
-                    if (relatedIds && relatedIds.length === 0) {
-                        relatedIds = null;
+                    if (linkedEntryIds && linkedEntryIds.length === 0) {
+                        linkedEntryIds = null;
                     }
                 }
                 
@@ -125,7 +127,7 @@
                     affected_publications: normalizeArray(row?.['Affected Publications']),
                     parent_child_matches: Array.isArray(row?.['parent_child_matches']) ? row['parent_child_matches'] : [],
                     sources: normalizeArray(row?.Sources),
-                    related_ids: relatedIds,
+                    linked_entry_ids: linkedEntryIds,
                     // Lawsuit-specific fields
                     // Rows sharing a lawsuit_id are the SAME case at different points in time,
                     // not related cases. CardView merges them into one card with a status track.

@@ -29,7 +29,7 @@
 	function isRelatedCardInFilteredView(row) {
 		if (viewingRelatedTo == null || row.id === viewingRelatedTo) return false;
 		const sourceRow = idToRowMap.get(viewingRelatedTo);
-		return Array.isArray(sourceRow?.related_ids) && sourceRow.related_ids.includes(row.id);
+		return Array.isArray(sourceRow?.linked_entry_ids) && sourceRow.linked_entry_ids.includes(row.id);
 	}
 	
 	// Helper to check if a card is expanded
@@ -50,8 +50,8 @@
 		if (viewingRelatedTo == null) return;
 
 		const sourceRow = idToRowMap.get(viewingRelatedTo);
-		if (!Array.isArray(sourceRow?.related_ids)) return;
-		expandedCards = new Set([...expandedCards, ...sourceRow.related_ids]);
+		if (!Array.isArray(sourceRow?.linked_entry_ids)) return;
+		expandedCards = new Set([...expandedCards, ...sourceRow.linked_entry_ids]);
 	});
 
 	// Esc to dismiss the related view
@@ -431,9 +431,9 @@
 		let dataToFilter = data;
 		if (viewingRelatedTo != null) {
 			const sourceRow = idToRowMap.get(viewingRelatedTo);
-			if (sourceRow && sourceRow.related_ids && Array.isArray(sourceRow.related_ids)) {
+			if (sourceRow && sourceRow.linked_entry_ids && Array.isArray(sourceRow.linked_entry_ids)) {
 				const relatedRows = [sourceRow]; // Include the main card
-				for (const id of sourceRow.related_ids) {
+				for (const id of sourceRow.linked_entry_ids) {
 					const relatedRow = idToRowMap.get(id);
 					// Entries of the same case are not "related" — they are the same
 					// lawsuit, already merged into the source card.
@@ -1000,58 +1000,33 @@
 	}
 
 	/**
-	 * Gets related cards for a given row based on related_ids
+	 * Gets the entries a row links to, from its curated linked_entry_ids.
 	 * @param {Object} row - Data row
-	 * @returns {Object[]} Array of related card rows, sorted by date (newest first)
+	 * @returns {Object[]} Array of linked entry rows, sorted by date (newest first)
 	 */
-	function getRelatedCards(row) {
-		if (!row.related_ids || !Array.isArray(row.related_ids) || row.related_ids.length === 0) {
+	function getLinkedEntries(row) {
+		if (!row.linked_entry_ids || !Array.isArray(row.linked_entry_ids) || row.linked_entry_ids.length === 0) {
 			return [];
 		}
-		
-		const relatedCards = [];
-		for (const id of row.related_ids) {
-			const relatedRow = idToRowMap.get(id);
+
+		const linkedEntries = [];
+		for (const id of row.linked_entry_ids) {
+			const linkedRow = idToRowMap.get(id);
 			// Skip other entries of the same case — those live in the status track,
-			// not the related-cards tray.
-			if (relatedRow && !isSameCase(row, relatedRow)) {
-				relatedCards.push(relatedRow);
+			// not the linked-entries tray.
+			if (linkedRow && !isSameCase(row, linkedRow)) {
+				linkedEntries.push(linkedRow);
 			}
 		}
-		
+
 		// Sort by date (newest first)
-		relatedCards.sort((a, b) => {
+		linkedEntries.sort((a, b) => {
 			const aDate = parseDate(a.date || '');
 			const bDate = parseDate(b.date || '');
 			return bDate.getTime() - aDate.getTime();
 		});
-		
-		return relatedCards;
-	}
 
-	/**
-	 * Names the related cards by what they are, not by what the source card is.
-	 * A lawsuit that ended in a deal links to a deal, so falling back to the
-	 * source's own type would mislabel it. Mixed types get the neutral noun.
-	 * @param {Object[]} relatedCards - Cards returned by getRelatedCards
-	 * @returns {string} Label such as 'Deal', 'Lawsuits' or 'Entries'
-	 */
-	function getRelatedCardsLabel(relatedCards) {
-		const types = new Set();
-		for (const card of relatedCards) {
-			for (const type of getInteractionTypes(card.interaction)) {
-				types.add(type);
-			}
-		}
-
-		const plural = relatedCards.length !== 1;
-		if (types.size !== 1) return plural ? 'Entries' : 'Entry';
-
-		const [type] = types;
-		const noun = type === INTERACTION_TYPES.LAWSUIT ? 'Lawsuit'
-			: type === INTERACTION_TYPES.GRANT ? 'Grant'
-			: 'Deal';
-		return plural ? `${noun}s` : noun;
+		return linkedEntries;
 	}
 
 
@@ -1096,7 +1071,7 @@
 							{@const allSources = normalizeSources(entry.sources)}
 						{@const parentChildMatches = Array.isArray(entry.parent_child_matches) ? entry.parent_child_matches : []}
 						{@const hierarchyTree = buildHierarchyTree(parentChildMatches, allPublishers)}
-						{@const relatedCards = getRelatedCards(row)}
+						{@const linkedEntries = getLinkedEntries(row)}
 						{@const borderColors = interactionTypes.map(t => {
 							if (t === 'lawsuit') return '#e57373';
 							if (t === 'grant') return '#64b5f6';
@@ -1371,8 +1346,8 @@
 					</div>
 				{/if}
 								
-								<!-- Related Cards Link -->
-								{#if relatedCards.length > 0}
+								<!-- Linked Entries Link -->
+								{#if linkedEntries.length > 0}
 									{@const isInRelatedView = viewingRelatedTo != null && (viewingRelatedTo === row.id || isRelatedCardInFilteredView(row))}
 									<div class="related-cards-toggle">
 										{#if isInRelatedView}
@@ -1394,7 +1369,7 @@
 											>
 												<span class="related-toggle-icon">→</span>
 												<span class="related-toggle-text">
-													Related {getRelatedCardsLabel(relatedCards)} ({relatedCards.length})
+													Linked Entries ({linkedEntries.length})
 												</span>
 											</button>
 										{/if}
