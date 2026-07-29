@@ -2336,14 +2336,21 @@
 		flex-shrink: 0;
 	}
 
-	/* One colour per status, shared by every badge in a progression chain.
+	/* One colour per status, shared by the single-status badge and the dots of a
+	   progression chain, so the same status reads the same on every card.
 	   Adding a status means adding one line here and one case in getStatusClass. */
-	.status-badge.in-progress { --status-color: #ffb300; --status-glow: rgba(255, 179, 0, 0.2); }
-	.status-badge.settled { --status-color: #4caf50; --status-glow: rgba(76, 175, 80, 0.2); }
-	.status-badge.dismissed { --status-color: #9e9e9e; --status-glow: rgba(158, 158, 158, 0.2); }
-	.status-badge.decided { --status-color: #254c6f; --status-glow: rgba(37, 76, 111, 0.2); }
-	.status-badge.consolidated { --status-color: #8d6e63; --status-glow: rgba(141, 110, 99, 0.2); }
-	.status-badge.default { --status-color: #666; --status-glow: rgba(102, 102, 102, 0.2); }
+	.status-badge.in-progress,
+	.status-chain-step.in-progress { --status-color: #ffb300; --status-glow: rgba(255, 179, 0, 0.2); }
+	.status-badge.settled,
+	.status-chain-step.settled { --status-color: #4caf50; --status-glow: rgba(76, 175, 80, 0.2); }
+	.status-badge.dismissed,
+	.status-chain-step.dismissed { --status-color: #9e9e9e; --status-glow: rgba(158, 158, 158, 0.2); }
+	.status-badge.decided,
+	.status-chain-step.decided { --status-color: #254c6f; --status-glow: rgba(37, 76, 111, 0.2); }
+	.status-badge.consolidated,
+	.status-chain-step.consolidated { --status-color: #8d6e63; --status-glow: rgba(141, 110, 99, 0.2); }
+	.status-badge.default,
+	.status-chain-step.default { --status-color: #666; --status-glow: rgba(102, 102, 102, 0.2); }
 
 	.status-badge .status-indicator {
 		background-color: var(--status-color);
