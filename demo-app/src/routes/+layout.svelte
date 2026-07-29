@@ -6,7 +6,7 @@
 	let { children } = $props();
 
 	// Social sharing metadata
-	const siteUrl = 'https://towcenter.github.io/deals-and-lawsuits-tracker/';
+	const siteUrl = 'https://tow.cjr.org/ai-deals-lawsuits/';
 	const title = 'AI Deals and Lawsuits | Platforms and Publishers';
 	const description = 'A tracker monitoring developments between news publishers and AI companies—including lawsuits, deals, and grants—based on publicly available information.';
 	// Social sharing image - using hosted CJR image (accessible and stable URL)
