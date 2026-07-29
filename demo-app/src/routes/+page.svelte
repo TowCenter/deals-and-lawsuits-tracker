@@ -127,6 +127,9 @@
                     sources: normalizeArray(row?.Sources),
                     related_ids: relatedIds,
                     // Lawsuit-specific fields
+                    // Rows sharing a lawsuit_id are the SAME case at different points in time,
+                    // not related cases. CardView merges them into one card with a status track.
+                    lawsuit_id: isValidValue(row?.Lawsuit_ID) ? String(row.Lawsuit_ID) : null,
                     status: isValidValue(row?.Status) ? String(row.Status) : null,
                     case_number: isValidValue(row?.['Case Number']) ? String(row['Case Number']) : null,
                     defendant: normalizeArray(row?.Defendant),
@@ -143,15 +146,6 @@
 
     // Reactive partnerships - updates when rawData changes
     const partnerships = $derived(normalizeData(rawData));
-
-    const tableColumns = [
-        "Date",
-        "Interaction",
-        "AI Company",
-        "News Org",
-        "Type",
-        "Reported Details"
-    ];
 
     // Filter state
     let searchQuery = $state('');
@@ -207,8 +201,24 @@
         ];
         
         const header = csvColumns.map(col => col.name).join(',');
-        
-        const rows = filteredData.map(row => {
+
+        // A merged lawsuit card stands in for every entry of that case, so expand it
+        // back out — the CSV keeps one line per entry.
+        const seenIds = new Set();
+        const exportRows = [];
+        for (const row of filteredData) {
+            const entries = row.lawsuit_id
+                ? partnerships.filter(r => r.lawsuit_id === row.lawsuit_id)
+                : [row];
+            for (const entry of entries) {
+                if (seenIds.has(entry.id)) continue;
+                seenIds.add(entry.id);
+                exportRows.push(entry);
+            }
+        }
+        exportRows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+        const rows = exportRows.map(row => {
             return csvColumns.map(col => {
                 let value = row[col.key];
                 
@@ -323,11 +333,11 @@
         {/if}
         {/each} -->
         <BodyText
-            text="This tracker monitors developments between news publishers and AI companies—including <span class='interaction-tag-inline lawsuit'>Lawsuits</span>, <span class='interaction-tag-inline deal'>Deals</span>, and <span class='interaction-tag-inline grant'>Grants</span>—based on publicly available information.
+            text={`This tracker monitors developments between news publishers and AI companies—including <span class='interaction-tag-inline lawsuit'>Lawsuits</span>, <span class='interaction-tag-inline deal'>Deals</span>, and <span class='interaction-tag-inline grant'>Grants</span>—based on publicly available information.
 
 <br><br>It is compiled by Tow Center as part of the <a href='https://towcenter.columbia.edu/news/platforms-and-publishers'>Platforms and Publishers project</a>.
 The tracker is updated at the beginning of each month. Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> with any feedback or suggestions about developments we may have missed.
-<br><br>Read our <a href='/deals-and-lawsuits-tracker/methodology'>methodology</a> to learn more about how we collect and categorize this data."
+<br><br>Read our <a href='${base}/methodology'>methodology</a> to learn more about how we collect and categorize this data.`}
         />
         <div class="update-date-divider">
             <div class="divider-line"></div>
@@ -340,7 +350,6 @@ The tracker is updated at the beginning of each month. Please contact <a href='m
     {#if !showLoading}
         <Filters 
             data={partnerships}
-            columns={tableColumns}
             bind:searchQuery
             bind:filterInteraction
             bind:filterType
@@ -353,7 +362,6 @@ The tracker is updated at the beginning of each month. Please contact <a href='m
         <!-- Card View -->
         <CardView 
             data={partnerships}
-            columns={tableColumns}
             {searchQuery}
             {filterInteraction}
             {filterType}

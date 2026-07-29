@@ -1,10 +1,9 @@
 <script>
-	import { getColumnKey, parseArray, formatDate, parseUrls, formatCitations } from './utils.js';
+	import { parseArray, formatDate } from './utils.js';
 
 	/**
 	 * @typedef {Object} Props
 	 * @property {Array<Object>} [data=[]] - Card data rows
-	 * @property {string[]} [columns=[]] - Column names (for filtering/search compatibility)
 	 * @property {string} [searchQuery=''] - Search query string
 	 * @property {string[]} [filterInteraction=[]] - Filter by interactions
 	 * @property {string[]} [filterType=[]] - Filter by types
@@ -15,8 +14,7 @@
 
 	/** @type {Props} */
 	let { 
-		data = [], 
-		columns = [],
+		data = [],
 		searchQuery = '',
 		filterInteraction = [],
 		filterType = [],
@@ -27,60 +25,34 @@
 
 	let expandedCards = $state(new Set());
 	
-	// Helper to check if a card is a related card (not the main one) in filtered view
+	// True for a card shown because another card links to it, not the card being viewed
 	function isRelatedCardInFilteredView(row) {
-		if (viewingRelatedTo == null) return false;
+		if (viewingRelatedTo == null || row.id === viewingRelatedTo) return false;
 		const sourceRow = idToRowMap.get(viewingRelatedTo);
-		if (!sourceRow || !sourceRow.related_ids) return false;
-		// If this is the main card, it's not a related card
-		if (row.id === viewingRelatedTo) return false;
-		// If this card is in the related_ids, it's a related card
-		return Array.isArray(sourceRow.related_ids) && sourceRow.related_ids.includes(row.id);
+		return Array.isArray(sourceRow?.related_ids) && sourceRow.related_ids.includes(row.id);
 	}
 	
 	// Helper to check if a card is expanded
-	function isCardExpanded(cardId, row) {
-		return expandedCards.has(cardId);
+	function isCardExpanded(rowId) {
+		return expandedCards.has(rowId);
 	}
 	
+	// ID of the card whose related items we're viewing, or null for all
+	let viewingRelatedTo = $state(null);
+
 	// Track the last viewingRelatedTo to detect when it changes
 	let lastViewingRelatedTo = null;
-	
-	// Effect to expand related cards when entering filtered view (only once)
+
+	// Related cards start expanded when entering the related view (only once)
 	$effect(() => {
-		if (viewingRelatedTo !== lastViewingRelatedTo) {
-			lastViewingRelatedTo = viewingRelatedTo;
-			if (viewingRelatedTo != null) {
-				const sourceRow = idToRowMap.get(viewingRelatedTo);
-				if (sourceRow && sourceRow.related_ids && Array.isArray(sourceRow.related_ids)) {
-					// Add related cards to expandedCards so they start expanded
-					// We'll do this by finding all cardIds that match related row IDs
-					const newSet = new Set(expandedCards);
-					let changed = false;
-					
-					// Wait for groupedData to be available, then find and expand related cards
-					const grouped = groupedData;
-					for (const [monthYear, items] of Object.entries(grouped)) {
-						for (let index = 0; index < items.length; index++) {
-							const item = items[index];
-							if (sourceRow.related_ids.includes(item.id)) {
-								const cardId = `${monthYear}-${index}-${item.date || ''}`;
-								if (!newSet.has(cardId)) {
-									newSet.add(cardId);
-									changed = true;
-								}
-							}
-						}
-					}
-					
-					if (changed) {
-						expandedCards = newSet;
-					}
-				}
-			}
-		}
+		if (viewingRelatedTo === lastViewingRelatedTo) return;
+		lastViewingRelatedTo = viewingRelatedTo;
+		if (viewingRelatedTo == null) return;
+
+		const sourceRow = idToRowMap.get(viewingRelatedTo);
+		if (!Array.isArray(sourceRow?.related_ids)) return;
+		expandedCards = new Set([...expandedCards, ...sourceRow.related_ids]);
 	});
-	let viewingRelatedTo = $state(null); // ID of the card whose related items we're viewing, or null for all
 
 	// Esc to dismiss the related view
 	$effect(() => {
@@ -104,6 +76,87 @@
 		}
 		return map;
 	});
+
+	/**
+	 * Groups rows that share a lawsuit_id — these are the SAME case at different
+	 * points in time, not related cases. Only cases with more than one entry are
+	 * kept; a single-entry case renders exactly as it always has.
+	 * @returns {Map<string, Object[]>} lawsuit_id -> entries sorted oldest first
+	 */
+	const caseGroups = $derived.by(() => {
+		const groups = new Map();
+		for (const row of data) {
+			const caseId = row.lawsuit_id;
+			if (!caseId) continue;
+			if (!groups.has(caseId)) groups.set(caseId, []);
+			groups.get(caseId).push(row);
+		}
+		for (const [caseId, entries] of groups) {
+			if (entries.length < 2) {
+				groups.delete(caseId);
+				continue;
+			}
+			entries.sort((a, b) => parseDate(a.date || '').getTime() - parseDate(b.date || '').getTime());
+		}
+		return groups;
+	});
+
+	/**
+	 * Returns every entry of the case this row belongs to, or null if the row is
+	 * not part of a multi-entry case.
+	 * @param {Object} row - Data row
+	 * @returns {Object[]|null} Case entries, oldest first
+	 */
+	function getCaseEntries(row) {
+		if (!row?.lawsuit_id) return null;
+		return caseGroups.get(row.lawsuit_id) || null;
+	}
+
+	/** True when two rows are entries of the same case. */
+	function isSameCase(rowA, rowB) {
+		if (!rowA?.lawsuit_id || !rowB?.lawsuit_id) return false;
+		return rowA.lawsuit_id === rowB.lawsuit_id && caseGroups.has(rowA.lawsuit_id);
+	}
+
+	// Which entry of a case is currently shown, keyed by lawsuit_id.
+	// Unset means "the most recent entry that survived filtering".
+	let selectedCaseEntry = $state(new Map());
+
+	function selectCaseEntry(caseId, entryId) {
+		const next = new Map(selectedCaseEntry);
+		next.set(caseId, entryId);
+		selectedCaseEntry = next;
+	}
+
+	/**
+	 * Resolves the entry a merged case card should display.
+	 * @param {Object[]|null} caseEntries - All entries of the case
+	 * @param {Object} row - The representative (most recent matching) row
+	 * @returns {Object} The entry to render
+	 */
+	function getActiveEntry(caseEntries, row) {
+		if (!caseEntries) return row;
+		const selectedId = selectedCaseEntry.get(row.lawsuit_id);
+		if (selectedId == null) return row;
+		return caseEntries.find(entry => entry.id === selectedId) || row;
+	}
+
+	/**
+	 * Maps a status string to its indicator class.
+	 * @param {string} status - Raw status value
+	 * @returns {string} Status class
+	 */
+	function getStatusClass(status) {
+		const normalized = String(status || '').toLowerCase().trim();
+		if (!normalized) return 'default';
+		if (normalized.includes('progress') || normalized.includes('pending') || normalized.includes('ongoing')) return 'in-progress';
+		if (normalized.includes('settled') || normalized.includes('resolved') || normalized.includes('closed') || normalized.includes('summary judgement')) return 'settled';
+		if (normalized.includes('dismissed') || normalized.includes('dropped')) return 'dismissed';
+		if (normalized.includes('judgement') || normalized.includes('judgment') || normalized.includes('decided')) return 'decided';
+		if (normalized.includes('consolidated') || normalized.includes('amended')) return 'consolidated';
+		return 'default';
+	}
+
 
 	// Memoization caches
 	const allPublishersCache = new WeakMap();
@@ -145,17 +198,13 @@
 		};
 	}
 
-	function toggleExpandCard(cardIndex) {
-		const newSet = new Set(expandedCards);
-		if (newSet.has(cardIndex)) {
-			newSet.delete(cardIndex);
-		} else {
-			newSet.add(cardIndex);
-		}
-		expandedCards = newSet;
+	function toggleExpandCard(rowId) {
+		const next = new Set(expandedCards);
+		if (!next.delete(rowId)) next.add(rowId);
+		expandedCards = next;
 	}
 
-	function handleCardContentClick(event, cardId) {
+	function handleCardContentClick(event, rowId) {
 		// Check if text is currently selected/highlighted
 		const selection = window.getSelection();
 		if (selection && selection.toString().trim().length > 0) {
@@ -168,7 +217,7 @@
 			return; // Let links and collapse button work normally
 		}
 		// Collapse the card when clicking anywhere else
-		toggleExpandCard(cardId);
+		toggleExpandCard(rowId);
 	}
 
 	function parseDateImpl(dateStr) {
@@ -291,34 +340,6 @@
 	// Memoized version
 	const extractHierarchyOrgs = memoizePrimitive(extractHierarchyOrgsImpl, extractHierarchyOrgsCache, 500);
 
-	/**
-	 * Recursively extracts all publications and organization names from a hierarchy tree
-	 * @param {Object} tree - Hierarchy tree node
-	 * @returns {Set<string>} Set of all publication and organization names
-	 */
-	function extractAllFromTree(tree) {
-		const result = new Set();
-		if (!tree || typeof tree !== 'object') return result;
-		
-		for (const key in tree) {
-			if (key === 'publications' && Array.isArray(tree[key])) {
-				for (const pub of tree[key]) {
-					const trimmed = String(pub || '').trim();
-					if (trimmed) result.add(trimmed);
-				}
-			} else if (typeof tree[key] === 'object' && tree[key] !== null) {
-				const trimmed = String(key || '').trim();
-				if (trimmed) result.add(trimmed);
-				// Recursively extract from child nodes
-				const childResults = extractAllFromTree(tree[key]);
-				for (const item of childResults) {
-					result.add(item);
-				}
-			}
-		}
-		
-		return result;
-	}
 
 	/**
 	 * Gets all publishers for a row (including hierarchy)
@@ -332,33 +353,6 @@
 		return [...orgPublishers, ...affectedPubs, ...hierarchyOrgs];
 	}
 
-	/**
-	 * Gets all publications and organizations from a row including those in hierarchy tree
-	 * @param {Object} row - Data row
-	 * @param {Object} hierarchyTree - Hierarchy tree built from parent_child_matches
-	 * @param {string[]} orgsToDisplay - Organizations to check in the tree
-	 * @returns {Set<string>} Set of all publication and organization names
-	 */
-	function getAllPublicationsIncludingHierarchy(row, hierarchyTree, orgsToDisplay) {
-		const result = new Set();
-		
-		// Add direct publishers
-		const allPublishers = getAllPublishers(row);
-		for (const pub of allPublishers) {
-			result.add(pub);
-		}
-		
-		// Add publications from hierarchy tree
-		for (const org of orgsToDisplay) {
-			const orgTree = hierarchyTree[org] || {};
-			const treeItems = extractAllFromTree(orgTree);
-			for (const item of treeItems) {
-				result.add(item);
-			}
-		}
-		
-		return result;
-	}
 
 	// Memoized version using WeakMap (since row is an object reference)
 	const getAllPublishers = memoizeObject(getAllPublishersImpl, allPublishersCache);
@@ -439,7 +433,9 @@
 				const relatedRows = [sourceRow]; // Include the main card
 				for (const id of sourceRow.related_ids) {
 					const relatedRow = idToRowMap.get(id);
-					if (relatedRow) {
+					// Entries of the same case are not "related" — they are the same
+					// lawsuit, already merged into the source card.
+					if (relatedRow && !isSameCase(sourceRow, relatedRow)) {
 						relatedRows.push(relatedRow);
 					}
 				}
@@ -450,7 +446,7 @@
 		}
 		
 		// Early return if no filters
-		if (!filterInteraction?.length && !filterType?.length && !filterPlatform?.length && 
+		if (!filterInteraction?.length && !filterType?.length && !filterPlatform?.length &&
 		    !filterPublishers?.length && !searchQuery?.trim()) {
 			// Still need to sort
 			const sorted = [...dataToFilter];
@@ -459,7 +455,7 @@
 				const bDate = parseDate(b.date || '');
 				return bDate.getTime() - aDate.getTime();
 			});
-			return sorted;
+			return collapseCaseEntries(sorted);
 		}
 		
 		const filtered = [];
@@ -501,7 +497,29 @@
 			return bDate.getTime() - aDate.getTime();
 		});
 
-		return filtered;
+		return collapseCaseEntries(filtered);
+	}
+
+	/**
+	 * Keeps one card per case. Rows arrive newest first, so the first entry seen
+	 * for a case is the most recent one that survived filtering — that entry
+	 * anchors the card, and the status track carries the rest of the history.
+	 * @param {Object[]} rows - Rows sorted newest first
+	 * @returns {Object[]} Rows with same-case duplicates removed
+	 */
+	function collapseCaseEntries(rows) {
+		if (caseGroups.size === 0) return rows;
+		const seenCases = new Set();
+		const collapsed = [];
+		for (const row of rows) {
+			const caseId = row.lawsuit_id;
+			if (caseId && caseGroups.has(caseId)) {
+				if (seenCases.has(caseId)) continue;
+				seenCases.add(caseId);
+			}
+			collapsed.push(row);
+		}
+		return collapsed;
 	}
 
 	let filteredData = $derived(getFilteredAndSorted());
@@ -519,20 +537,8 @@
 			(filterType?.length > 0) ||
 			(filterPublishers?.length > 0);
 
-		if (hasActiveFilters) {
-			// Expand all filtered cards
-			const filteredCardIds = new Set();
-			for (const [monthYear, items] of Object.entries(groupedData)) {
-				for (let rowIndex = 0; rowIndex < items.length; rowIndex++) {
-					const row = items[rowIndex];
-					filteredCardIds.add(`${monthYear}-${rowIndex}-${row.date || ''}`);
-				}
-			}
-			expandedCards = filteredCardIds;
-		} else {
-			// Collapse all cards
-			expandedCards = new Set();
-		}
+		// Expand every matching card while filtering, collapse everything otherwise
+		expandedCards = hasActiveFilters ? new Set(filteredData.map(row => row.id)) : new Set();
 	});
 
 	/**
@@ -1026,7 +1032,9 @@
 		const relatedCards = [];
 		for (const id of row.related_ids) {
 			const relatedRow = idToRowMap.get(id);
-			if (relatedRow) {
+			// Skip other entries of the same case — those live in the status track,
+			// not the related-cards tray.
+			if (relatedRow && !isSameCase(row, relatedRow)) {
 				relatedCards.push(relatedRow);
 			}
 		}
@@ -1041,51 +1049,9 @@
 		return relatedCards;
 	}
 
-	/**
-	 * Gets the intersection of publishers between two rows (including hierarchy)
-	 * Uses exact matching (case-insensitive) - no substring matching
-	 * @param {Object} mainRow - Main card row
-	 * @param {Object} relatedRow - Related card row
-	 * @returns {string[]} Array of shared publisher names
-	 */
-	function getSharedPublishers(mainRow, relatedRow) {
-		// Get all publications from main row (including hierarchy)
-		const mainPublishers = new Set();
-		const mainAllPublishers = getAllPublishers(mainRow);
-		for (const pub of mainAllPublishers) {
-			const normalized = String(pub).trim().toLowerCase();
-			if (normalized) {
-				mainPublishers.add(normalized);
-			}
-		}
-		
-		// Get all publications from related row (including hierarchy)
-		const relatedPublishers = new Set();
-		const relatedAllPublishers = getAllPublishers(relatedRow);
-		for (const pub of relatedAllPublishers) {
-			const normalized = String(pub).trim().toLowerCase();
-			if (normalized) {
-				relatedPublishers.add(normalized);
-			}
-		}
-		
-		// Find exact intersection (case-insensitive, no substring matching)
-		const shared = [];
-		const addedNormalized = new Set();
-		const mainPubsArray = Array.from(mainAllPublishers);
-		for (const pub of mainPubsArray) {
-			const pubNormalized = String(pub).trim().toLowerCase();
-			if (pubNormalized && relatedPublishers.has(pubNormalized) && !addedNormalized.has(pubNormalized)) {
-				shared.push(String(pub).trim());
-				addedNormalized.add(pubNormalized);
-			}
-		}
-		
-		return shared;
-	}
 
-	function viewRelatedCards(cardId) {
-		viewingRelatedTo = cardId;
+	function viewRelatedCards(rowId) {
+		viewingRelatedTo = rowId;
 	}
 
 	function viewAllCards() {
@@ -1117,16 +1083,15 @@
 				</div>
 				<div class="timeline-divider"></div>
 				<div class="month-group">
-					{#each items as row, rowIndex (row)}
+					{#each items as row (row.id)}
 			{@const interactionTypes = getInteractionTypes(row.interaction)}
 			{@const interactionType = getInteractionType(row.interaction)}
-						{@const allPublishers = Array.isArray(row.organization_publisher_named_in_deal_suit) ? row.organization_publisher_named_in_deal_suit : []}
-						{@const cardId = `${monthYear}-${rowIndex}-${row.date || ''}`}
-						{@const allSources = normalizeSources(row.sources)}
-						{@const aiCompany = Array.isArray(row.platform) && row.platform.length > 0 ? row.platform[0] : '—'}
-						{@const parentChildMatches = Array.isArray(row.parent_child_matches) ? row.parent_child_matches : []}
-						{@const orgsToDisplay = allPublishers}
-						{@const hierarchyTree = buildHierarchyTree(parentChildMatches, orgsToDisplay)}
+						{@const caseEntries = getCaseEntries(row)}
+						{@const entry = getActiveEntry(caseEntries, row)}
+						{@const allPublishers = Array.isArray(entry.organization_publisher_named_in_deal_suit) ? entry.organization_publisher_named_in_deal_suit : []}
+							{@const allSources = normalizeSources(entry.sources)}
+						{@const parentChildMatches = Array.isArray(entry.parent_child_matches) ? entry.parent_child_matches : []}
+						{@const hierarchyTree = buildHierarchyTree(parentChildMatches, allPublishers)}
 						{@const relatedCards = getRelatedCards(row)}
 						{@const borderColors = interactionTypes.map(t => {
 							if (t === 'lawsuit') return '#e57373';
@@ -1147,22 +1112,21 @@
 							class="card-wrapper"
 							class:is-source={isSourceCard(row)}
 							class:is-related={viewingRelatedTo != null && !isSourceCard(row)}
-							data-card-id={cardId}
 						>
 			<div
 				class="card {interactionType}"
-				class:collapsed={!isCardExpanded(cardId, row)}
+				class:collapsed={!isCardExpanded(row.id)}
 				class:has-multiple-interactions={interactionTypes.length > 1}
 				style={borderGradient ? `--border-gradient: ${borderGradient};` : ''}
 			>
 								<!-- Colored Header -->
-								{#if !isCardExpanded(cardId, row)}
+								{#if !isCardExpanded(row.id)}
 								<div 
 									class="card-header {interactionType}"
-									onclick={() => toggleExpandCard(cardId)}
+									onclick={() => toggleExpandCard(row.id)}
 									role="button"
 									tabindex="0"
-									onkeydown={(e) => e.key === 'Enter' && toggleExpandCard(cardId)}
+									onkeydown={(e) => e.key === 'Enter' && toggleExpandCard(row.id)}
 								>
 									{#if row.date}
 										<div class="header-date">{formatDate(row.date)}</div>
@@ -1210,36 +1174,79 @@
 												</span>
 											{/each}
 										</div>
-										<span class="expand-icon">{isCardExpanded(cardId, row) ? '−' : '+'}</span>
+										<span class="expand-icon">{isCardExpanded(row.id) ? '−' : '+'}</span>
 						</div>
 						</div>
 					{/if}
 					
+								<!-- Collapse control: sits where the header's expand icon was -->
+								{#if isCardExpanded(row.id)}
+									<div class="collapse-button" onclick={(e) => { e.stopPropagation(); toggleExpandCard(row.id); }} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && toggleExpandCard(row.id)}>
+										<span class="expand-icon">−</span>
+									</div>
+								{/if}
+
+								<!-- Case history: every entry sharing this lawsuit_id, oldest first -->
+								{#if isCardExpanded(row.id) && caseEntries}
+									<div class="case-track" role="tablist" aria-label="Case history">
+										{#each caseEntries as caseEntry, stepIndex (caseEntry.id)}
+											{@const isActiveStep = caseEntry.id === entry.id}
+											<button
+												type="button"
+												class="case-step {getStatusClass(caseEntry.status)}"
+												role="tab"
+												aria-selected={isActiveStep}
+												onclick={(e) => { e.stopPropagation(); selectCaseEntry(row.lawsuit_id, caseEntry.id); }}
+											>
+												<span class="case-step-date">{formatDate(caseEntry.date)}</span>
+												<span class="case-step-status">{caseEntry.status || 'Filed'}</span>
+												<span class="case-step-rail">
+													<span class="case-step-dot"></span>
+													{#if stepIndex < caseEntries.length - 1}
+														<span class="case-step-line"></span>
+													{/if}
+												</span>
+											</button>
+										{/each}
+									</div>
+								{/if}
+
 								<!-- Two Column Layout -->
-								{#if isCardExpanded(cardId, row)}
-									<div class="card-content" onclick={(e) => handleCardContentClick(e, cardId)}>
-										<div class="collapse-button" onclick={(e) => { e.stopPropagation(); toggleExpandCard(cardId); }} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && toggleExpandCard(cardId)}>
-											<span class="expand-icon">−</span>
-										</div>
+								{#if isCardExpanded(row.id)}
+									<div class="card-content" onclick={(e) => handleCardContentClick(e, row.id)}>
 									<!-- Column 1 -->
 									<div class="card-column column-1">
 					<div class="card-field">
 						<div class="field-label">{interactionType === 'lawsuit' ? 'Defendant(s)' : 'AI Company'}</div>
 						<div class="field-value">
-							{#if interactionType === 'lawsuit' && Array.isArray(row.defendant) && row.defendant.length > 0}
-								{#each row.defendant as defendant}
+							{#if interactionType === 'lawsuit' && Array.isArray(entry.defendant) && entry.defendant.length > 0}
+								{#each entry.defendant as defendant}
 									<div class="field-item">{@html highlightText(defendant)}</div>
 								{/each}
-							{:else if Array.isArray(row.platform) && row.platform.length > 0}
-								{#each row.platform as platform}
+							{:else if Array.isArray(entry.platform) && entry.platform.length > 0}
+								{#each entry.platform as platform}
 									<div class="field-item">{@html highlightText(platform)}</div>
 								{/each}
 					{/if}
 								</div>
 				</div>
 
+					{#if caseEntries && Array.isArray(entry.plaintiff) && entry.plaintiff.length > 0}
+						<div class="card-field">
+							<div class="field-label">Plaintiff(s)</div>
+							<div class="field-value">
+								{#each entry.plaintiff as plaintiff}
+									<div class="field-item">{@html highlightText(plaintiff)}</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
+
 					<div class="card-field news-org-field">
-						<div class="field-label">{interactionType === 'lawsuit' ? 'News Org(s)' : 'Publication(s)'}</div>
+						<div class="news-org-header">
+							<div class="field-label">{interactionType === 'lawsuit' ? 'News Org(s)' : 'Publication(s)'}</div>
+							<div class="affected-note">(Publications named in {interactionType === 'lawsuit' ? 'suit' : interactionType === 'grant' ? 'deal announcement' : 'announcements or confirmed by platform'})</div>
+						</div>
 						<div class="field-value">
 							{#each allPublishers as org}
 								{@const orgTree = hierarchyTree[org] || {}}
@@ -1284,29 +1291,21 @@
 					{/if}
 				</div>
 							{/each}
-							{#if allPublishers.some(org => {
-								const orgTree = hierarchyTree[org] || {};
-								return Object.keys(orgTree).length > 0 || (orgTree.publications && orgTree.publications.length > 0);
-							})}
-								<div class="affected-note">
-									(Publications named in {interactionType === 'lawsuit' ? 'suit' : interactionType === 'grant' ? 'deal announcement' : 'announcements or confirmed by platform'})
-								</div>
-							{/if}
 						</div>
 					</div>
 
 					<div class="card-field">
 						<div class="field-label">{interactionType === 'lawsuit' ? 'Complaint' : 'Type'}</div>
 						<div class="field-value type-tags-wrapper">
-							{#if Array.isArray(row.type) && row.type.length > 0}
-								{#each row.type as type}
+							{#if Array.isArray(entry.type) && entry.type.length > 0}
+								{#each entry.type as type}
 									{@const normalizedType = String(type).trim()}
 									{#if normalizedType}
 										<span class="type-tag">{@html highlightText(normalizedType)}</span>
 									{/if}
 								{/each}
-							{:else if row.type}
-								{@const normalizedType = String(row.type).trim()}
+							{:else if entry.type}
+								{@const normalizedType = String(entry.type).trim()}
 								{#if normalizedType}
 									<span class="type-tag">{@html highlightText(normalizedType)}</span>
 								{/if}
@@ -1315,23 +1314,21 @@
 					</div>
 
 										{#if interactionType === 'lawsuit'}
-											{#if row.status}
-												{@const status = String(row.status).toLowerCase().trim()}
-												{@const statusClass = status.includes('progress') || status.includes('pending') || status.includes('ongoing') ? 'in-progress' : status.includes('settled') || status.includes('resolved') || status.includes('closed') || status.includes('summary judgement') ? 'settled' : status.includes('dismissed') || status.includes('dropped') ? 'dismissed' : 'default'}
+											{#if entry.status}
 					<div class="card-field">
 													<div class="field-label">Status:</div>
 													<div class="field-value">
-														<span class="status-badge {statusClass}">
+														<span class="status-badge {getStatusClass(entry.status)}">
 															<span class="status-indicator"></span>
-															<span class="status-text">{@html highlightText(row.status)}</span>
+															<span class="status-text">{@html highlightText(entry.status)}</span>
 														</span>
 					</div>
 												</div>
 											{/if}
-											{#if row.location}
+											{#if entry.location}
 					<div class="card-field">
 													<div class="field-label">Location:</div>
-													<div class="field-value">{@html highlightText(row.location)}</div>
+													<div class="field-value">{@html highlightText(entry.location)}</div>
 												</div>
 											{/if}
 										{/if}
@@ -1340,23 +1337,25 @@
 									<!-- Column 2 -->
 									<div class="card-column column-2">
 					<div class="card-field reported-details">
-						<div class="field-label">Reported Details</div>
+						<div class="field-label">
+							{#if caseEntries}Reported Details — {formatDate(entry.date)}{:else}Reported Details{/if}
+						</div>
 						<div class="field-value">
 							<span class="reported-text">
-							{@html highlightText(row.reported_details || '—')}
+							{@html highlightText(entry.reported_details || '—')}
 							</span>
 										</div>
 									</div>
 
-										{#if interactionType === 'lawsuit' && row.case_number && row.case_number}
-											{@const caseNumber = String(row.case_number).trim()}
+										{#if interactionType === 'lawsuit' && entry.case_number && entry.case_number}
+											{@const caseNumber = String(entry.case_number).trim()}
 											{@const isUnknown = caseNumber.toLowerCase() === '(unknown)' || caseNumber.toLowerCase() === 'unknown' || caseNumber === '—' || caseNumber === 'nan'}
 											{#if !isUnknown}
 												<div class="card-field case-details-field">
 													<div class="field-label">Case Details:</div>
 													<div class="field-value">
-														{#if row.case_filing && row.case_filing}
-															<a href={row.case_filing} target="_blank" rel="noopener noreferrer" class="source-link">
+														{#if entry.case_filing && entry.case_filing}
+															<a href={entry.case_filing} target="_blank" rel="noopener noreferrer" class="source-link">
 																{@html highlightText(caseNumber)}
 															</a>
 														{:else}
@@ -1699,9 +1698,6 @@
 		padding: 0.15rem 0.4rem;
 	}
 
-		.header-type-tags {
-			display: none !important;
-		}
 
 		.type-tag {
 			font-size: 0.75rem;
@@ -1735,22 +1731,8 @@
 			gap: 0.4rem;
 		}
 
-		.publisher-hierarchy {
-		gap: 0.5rem;
-			width: 100%;
-			align-items: flex-start;
-			margin-left: 1rem;
-			padding-left: 0.5rem;
-	}
 
-		.publisher-tag {
-		font-size: 0.75rem;
-			padding: 0.2rem 0.5rem;
-		}
 
-		.hierarchy-item-text {
-			font-size: 0.75rem;
-		}
 
 		.affected-publications {
 			margin-left: 1.25rem;
@@ -1772,8 +1754,8 @@
 		}
 
 		.affected-note {
-			font-size: 0.65rem;
-			padding-left: 0.75rem;
+			font-size: 0.6rem;
+			padding-left: 0;
 		}
 
 		/* Removed asterisk - now using parentheses */
@@ -1796,10 +1778,6 @@
 			padding-left: 0.75rem;
 		}
 
-		.tag {
-			font-size: 0.75rem;
-			padding: 0.2rem 0.5rem;
-		}
 
 		.source-link {
 		font-size: 0.85rem;
@@ -1809,6 +1787,17 @@
 		.expand-icon {
 			font-size: 1rem;
 		}
+
+
+		.case-track {
+			padding: 0.75rem 2.5rem 0.75rem 0;
+		}
+
+		.case-step {
+			min-width: 7.5rem;
+			padding-right: 1.25rem;
+		}
+
 	}
 
 	.card {
@@ -1958,12 +1947,6 @@
 		overflow-wrap: break-word;
 	}
 
-	.header-pipe {
-		font-weight: 400;
-		font-size: 0.85rem;
-		color: #999;
-		margin: 0 0.5rem;
-	}
 
 	.header-right {
 		display: flex;
@@ -2018,12 +2001,6 @@
 		padding: 0;
 	}
 
-	.header-type-tags {
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-		align-items: flex-end;
-	}
 
 	.type-tag {
 		display: inline-block;
@@ -2071,10 +2048,12 @@
 		cursor: pointer;
 	}
 
+	/* Anchored to the card, not the content, so it lands on the same spot
+	   the header's expand icon occupies when the card is collapsed. */
 	.collapse-button {
 		position: absolute;
 		top: 0.5rem;
-		right: 1rem;
+		right: 0.7rem;
 		cursor: pointer;
 		user-select: none;
 		z-index: 10;
@@ -2114,12 +2093,6 @@
 		padding-left: 1.5rem;
 	}
 
-	.links-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		margin-top: 0.25rem;
-	}
 
 	.source-link {
 		color: #254c6f;
@@ -2174,7 +2147,6 @@
 	.field-label,
 	.citation-link,
 	.affected-title,
-	.hierarchy-item-text,
 	.hierarchy-intermediate-name {
 		cursor: default;
 	}
@@ -2195,44 +2167,10 @@
 		align-items: flex-start;
 	}
 
-	.tag {
-		display: inline-block;
-		background-color: #f5f5f5;
-		color: #2c3e50;
-		padding: 0.35rem 0.75rem;
-		border-radius: 4px;
-		font-size: 0.85rem;
-		font-weight: 500;
-		line-height: 1.4;
-		width: fit-content;
-		max-width: 100%;
-		word-wrap: break-word;
-		overflow-wrap: break-word;
-		border: 1px solid #e8e8e8;
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-		position: relative;
-	}
 
 	/* Publisher Hierarchy Styles */
-	.publisher-hierarchy {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		position: relative;
-		margin-left: 1.25rem;
-		padding-left: 0.75rem;
-	}
 
 	/* Vertical line from field-label to all children */
-	.publisher-hierarchy::before {
-		content: '';
-		position: absolute;
-		left: 0;
-		top: -0.4rem;
-		bottom: 0;
-		width: 1.5px;
-		background-color: #e0e0e0;
-	}
 
 	.publisher-item {
 		display: flex;
@@ -2255,41 +2193,9 @@
 	}
 
 	/* Vertical line from tag down to connect with children */
-	.publisher-item:has(.affected-publications) .tag::after {
-		content: '';
-		position: absolute;
-		left: 0.5rem;
-		bottom: -0.15rem;
-		width: 1px;
-		height: 0.15rem;
-		background-color: #e5e5e5;
-	}
 
 
-	.publisher-tag {
-		display: inline-block;
-		background-color: #f0f0f0;
-		color: #333;
-		padding: 0.25rem 0.6rem;
-		border-radius: 3px;
-		font-size: 0.8rem;
-		font-weight: 500;
-		line-height: 1.4;
-		white-space: nowrap;
-		align-self: flex-start;
-		position: relative;
-	}
 
-	.hierarchy-item-text {
-		display: inline-block;
-		color: #333;
-		font-size: 0.8rem;
-		font-weight: 500;
-		line-height: 1.4;
-		white-space: nowrap;
-		align-self: flex-start;
-		position: relative;
-	}
 
 	.affected-publications {
 		display: flex;
@@ -2308,13 +2214,23 @@
 		gap: 0.1rem;
 	}
 
+	.news-org-header {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		margin-bottom: 0.4rem;
+	}
+
+	.news-org-header .field-label {
+		margin-bottom: 0;
+	}
+
 	.affected-note {
-		font-size: 0.65rem;
-		color: #999;
-		font-style: italic;
-		margin-top: 0.5rem;
-		position: relative;
-		padding-left: 0;
+		font-size: 0.6rem;
+		line-height: 1.3;
+		color: #b0b0b0;
+		font-style: normal;
+		letter-spacing: 0.2px;
 	}
 
 	.hierarchy-intermediate {
@@ -2463,24 +2379,18 @@
 		flex-shrink: 0;
 	}
 
-	.status-badge.in-progress .status-indicator {
-		background-color: #ffb300;
-		box-shadow: 0 0 0 2px rgba(255, 179, 0, 0.2);
-	}
+	/* One colour per status, shared by the badge dot and the case-track dots.
+	   Adding a status means adding one line here and one case in getStatusClass. */
+	.status-badge.in-progress, .case-step.in-progress { --status-color: #ffb300; --status-glow: rgba(255, 179, 0, 0.2); }
+	.status-badge.settled, .case-step.settled { --status-color: #4caf50; --status-glow: rgba(76, 175, 80, 0.2); }
+	.status-badge.dismissed, .case-step.dismissed { --status-color: #9e9e9e; --status-glow: rgba(158, 158, 158, 0.2); }
+	.status-badge.decided, .case-step.decided { --status-color: #254c6f; --status-glow: rgba(37, 76, 111, 0.2); }
+	.status-badge.consolidated, .case-step.consolidated { --status-color: #8d6e63; --status-glow: rgba(141, 110, 99, 0.2); }
+	.status-badge.default, .case-step.default { --status-color: #666; --status-glow: rgba(102, 102, 102, 0.2); }
 
-	.status-badge.settled .status-indicator {
-		background-color: #4caf50;
-		box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
-	}
-
-	.status-badge.dismissed .status-indicator {
-		background-color: #9e9e9e;
-		box-shadow: 0 0 0 2px rgba(158, 158, 158, 0.2);
-	}
-
-	.status-badge.default .status-indicator {
-		background-color: #666;
-		box-shadow: 0 0 0 2px rgba(102, 102, 102, 0.2);
+	.status-badge .status-indicator {
+		background-color: var(--status-color);
+		box-shadow: 0 0 0 2px var(--status-glow);
 	}
 
 	.status-text {
@@ -2488,53 +2398,100 @@
 		font-weight: 400;
 	}
 
-	.status-badge.header-status {
-		padding: 0.15rem 0.4rem;
-		background-color: transparent;
+
+
+	/* ===== Case history (rows sharing a lawsuit_id) ===== */
+
+	.case-track {
+		border-bottom: 1px solid #e0e0e0;
+		background-color: #fbfafa;
+		display: flex;
+		align-items: stretch;
+		overflow-x: auto;
+		/* Right gutter keeps the last step clear of the collapse control */
+		padding: 0.85rem 2.75rem 0.8rem 1.2rem;
+		gap: 0;
 	}
 
-	.status-badge.header-status .status-indicator {
-		width: 10px;
-		height: 10px;
-	}
-
-	.expand-btn {
-		display: inline-block;
-		margin-top: 0.5rem;
+	.case-step {
+		flex: 1 1 0;
+		min-width: 8.5rem;
 		background: none;
 		border: none;
-		color: #254c6f;
+		padding: 0.4rem 1.8rem 0.5rem 0;
+		text-align: left;
+		font-family: inherit;
+		color: #777;
 		cursor: pointer;
-		font-size: 0.75rem;
-		padding: 0;
-		text-decoration: underline;
-		font-weight: 500;
+		transition: color 0.15s ease;
 	}
 
-	.expand-btn:hover {
-		color: #1a3a52;
+	.case-step:last-child {
+		padding-right: 0;
 	}
 
-	.titles-section {
-		margin-top: 0.75rem;
-		padding-top: 0.75rem;
-		border-top: 1px solid #eee;
-	}
-
-	.titles-tags {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem;
-	}
-
-	.title-tag {
-		display: inline-block;
-		background-color: #f0f0f0;
-		padding: 0.25rem 0.5rem;
-		border-radius: 3px;
-		font-size: 0.75rem;
+	.case-step:hover {
 		color: #333;
 	}
+
+	.case-step:focus-visible {
+		outline: 2px solid #DE5A35;
+		outline-offset: 2px;
+	}
+
+	.case-step[aria-selected='true'] {
+		color: #1a1a1a;
+	}
+
+	.case-step-date {
+		display: block;
+		font-size: 0.65rem;
+		font-variant-numeric: tabular-nums;
+		color: inherit;
+		opacity: 0.85;
+	}
+
+	.case-step-status {
+		display: block;
+		font-size: 0.82rem;
+		font-weight: 600;
+		margin-top: 0.15rem;
+		line-height: 1.3;
+	}
+
+	.case-step-rail {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-top: 0.45rem;
+	}
+
+	.case-step-dot {
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
+		background-color: var(--status-color, #bdbdbd);
+		flex-shrink: 0;
+	}
+
+	.case-step-line {
+		height: 1px;
+		background-color: #d8d8d8;
+		flex: 1;
+	}
+
+	.case-step[aria-selected='true'] .case-step-dot {
+		box-shadow: 0 0 0 3px rgba(222, 90, 53, 0.25);
+	}
+
+
+
+
+
+
+
+
+
 
 	.no-results {
 		grid-column: 1 / -1;
@@ -2557,65 +2514,13 @@
 
 	/* Related Cards - Integrated Design */
 	/* Related Cards - Filter View Design */
-	.related-view-header {
-		max-width: 1000px;
-		margin: 0 auto 1.5rem;
-		padding: 1rem 1.5rem;
-		background-color: #f8f9fa;
-		border: 1px solid #e0e0e0;
-		border-radius: 4px;
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		flex-wrap: wrap;
-	}
 
-	.related-view-back-btn {
-		background: #254c6f;
-		border: none;
-		color: white;
-		cursor: pointer;
-		font-size: 0.85rem;
-		padding: 0.5rem 1rem;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		transition: all 0.2s ease;
-		font-family: inherit;
-		font-weight: 500;
-		border-radius: 4px;
-	}
 
-	.related-view-back-btn:hover {
-		background-color: #1a3a52;
-	}
 
-	.related-view-back-icon {
-		font-size: 1rem;
-		font-weight: 600;
-	}
 
-	.related-view-back-text {
-		font-weight: 500;
-	}
 
-	.related-view-info {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex: 1;
-		font-size: 0.9rem;
-	}
 
-	.related-view-label {
-		color: #666;
-		font-weight: 400;
-	}
 
-	.related-view-source {
-		color: #333;
-		font-weight: 500;
-	}
 
 	.related-cards-toggle {
 		margin-top: 1rem;
@@ -2680,22 +2585,8 @@
 	}
 
 	@media screen and (max-width: 768px) {
-		.related-view-header {
-			padding: 0.75rem 1rem;
-			margin-bottom: 1rem;
-		}
 
-		.related-view-back-btn {
-			font-size: 0.8rem;
-			padding: 0.4rem 0.8rem;
-		}
 
-		.related-view-info {
-			font-size: 0.85rem;
-			flex-direction: column;
-			align-items: flex-start;
-			gap: 0.25rem;
-		}
 
 		.related-cards-toggle {
 			margin-top: 0.75rem;

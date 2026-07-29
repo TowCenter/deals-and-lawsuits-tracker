@@ -3,7 +3,6 @@
 
 	let {
 		data = [],
-		columns = [],
 		searchQuery = $bindable(''),
 		filterInteraction = $bindable([]),
 		filterType = $bindable([]),

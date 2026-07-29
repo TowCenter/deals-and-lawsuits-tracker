@@ -37,7 +37,7 @@
             text="If you have any additional questions about the data or how we collected it, please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska</a>."
         />
         <div class="back-link">
-            <a href="/deals-and-lawsuits-tracker/">← Back to Tracker</a>
+            <a href="{base}/">← Back to Tracker</a>
         </div>
     </Body>
 </Article>
