@@ -1,62 +1,27 @@
 {
-  "name": "@tow/design-system",
+  "name": "deals-and-lawsuits-tracker",
   "version": "0.1.0",
-  "description": "Tow Center Design System - Svelte components for journalism projects",
+  "description": "Tow Center AI Deals and Disputes Tracker — a static site tracking deals, grants, and lawsuits between news publishers and AI companies",
+  "private": true,
   "type": "module",
-  "svelte": "dist/index.js",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "svelte": "./dist/index.js",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    },
-    "./tow.css": "./dist/tow.css",
-    "./cjr.css": "./dist/cjr.css"
-  },
-  "files": [
-    "dist",
-    "!dist/**/*.test.*",
-    "!dist/**/*.spec.*"
-  ],
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build && npm run package",
-    "package": "svelte-kit sync && svelte-package && publint",
-    "prepublishOnly": "npm run package",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "test": "vitest"
-  },
-  "peerDependencies": {
-    "svelte": "^4.0.0 || ^5.0.0"
-  },
-  "devDependencies": {
-    "@sveltejs/adapter-auto": "^3.0.0",
-    "@sveltejs/kit": "^2.0.0",
-    "@sveltejs/package": "^2.0.0",
-    "@sveltejs/vite-plugin-svelte": "^4.0.0",
-    "publint": "^0.2.0",
-    "svelte": "^5.0.0",
-    "svelte-check": "^4.0.0",
-    "typescript": "^5.0.0",
-    "vite": "^5.0.0",
-    "vitest": "^2.0.0"
+    "dev": "npm run dev --prefix demo-app",
+    "build": "npm run build --prefix demo-app",
+    "preview": "npm run preview --prefix demo-app",
+    "check": "npm run check --prefix demo-app",
+    "install:app": "npm ci --prefix demo-app"
   },
   "keywords": [
-    "svelte",
-    "components",
-    "design-system",
     "journalism",
-    "tow-center"
+    "tow-center",
+    "ai",
+    "tracker",
+    "svelte"
   ],
   "author": "Tow Center for Digital Journalism",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/TowCenter/tow-design-system.git"
+    "url": "git+https://github.com/TowCenter/deals-and-lawsuits-tracker.git"
   }
 }
