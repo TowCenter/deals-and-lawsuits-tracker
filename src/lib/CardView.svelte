@@ -1,5 +1,5 @@
 <script>
-	import { parseArray, formatDate, buildCountryIndex, getFlagsForName, getRowLocations } from './utils.js';
+	import { parseArray, formatDate, buildCountryIndex, getPlacesForName, getRowLocations } from './utils.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -24,6 +24,11 @@
 		filterLocation = [],
 		onFilteredDataChange = () => {}
 	} = $props();
+
+	// Countries only show while one is being filtered on — on a card of forty
+	// titles the same code otherwise repeats down the whole column, and there is
+	// no question it answers
+	const countriesVisible = $derived(filterLocation?.length > 0);
 
 	let expandedCards = $state(new Set());
 	
@@ -1053,12 +1058,19 @@
 	}
 </script>
 
-<!-- Country flags for a name on a card; a name in several countries gets several.
-     Hovering one names the country it stands for -->
+<!-- Country codes for a name on a card; a name in several countries gets several.
+     Hovering one names the country it stands for, and the one being filtered on
+     is picked out so it is clear why an entry is in the results -->
 {#snippet countryFlags(flagRow, flagName)}
-	{#each getFlagsForName(countryIndex, flagRow, flagName) as { country, flag }}
-		<span class="publication-flag" role="img" aria-label={country} data-place={country}>
-			{flag}
+	{#each countriesVisible ? getPlacesForName(countryIndex, flagRow, flagName) : [] as { country, label }}
+		<span
+			class="publication-country"
+			class:filtered={filterLocation?.includes(country)}
+			role="img"
+			aria-label={country}
+			data-place={country}
+		>
+			{label}
 		</span>
 	{/each}
 {/snippet}
@@ -2291,18 +2303,37 @@
 		margin: 0;
 	}
 
-	/* Country flag for a publication; a publication in several countries gets several */
-	.publication-flag {
+	/* Country code for a publication; a publication in several countries gets
+	   several. Quiet by default — on a card of forty titles the code repeats and
+	   it is the name that should read first */
+	.publication-country {
 		font-style: normal;
-		margin-left: 0.25rem;
+		margin-left: 0.35rem;
+		font-size: 0.65rem;
+		font-weight: 500;
+		letter-spacing: 0.06em;
+		color: #999;
 		cursor: help;
 		position: relative;
 		display: inline-block;
+		vertical-align: 1px;
+	}
+
+	/* The country being filtered on, so it is clear which name put the entry in
+	   the results. A pale wash of the search-hit yellow — the code is 0.65rem and
+	   repeats down the column, so it wants marking, not shouting */
+	.publication-country.filtered {
+		background-color: #fdf3c7;
+		color: #4a3c00;
+		font-weight: 600;
+		border-radius: 2px;
+		padding: 0.05rem 0.25rem;
+		margin-left: 0.3rem;
 	}
 
 	/* Names the country on hover. The card clips at its edges, so this sits above
-	   the flag, where a name always has card left over it */
-	.publication-flag::after {
+	   the code, where a name always has card left over it */
+	.publication-country::after {
 		content: attr(data-place);
 		position: absolute;
 		bottom: calc(100% + 0.25rem);
@@ -2321,7 +2352,7 @@
 		pointer-events: none;
 	}
 
-	.publication-flag:hover::after {
+	.publication-country:hover::after {
 		opacity: 1;
 		visibility: visible;
 	}

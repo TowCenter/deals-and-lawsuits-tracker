@@ -177,33 +177,41 @@ export function getCountryFlagMap(row) {
 	return asPlainObject(row?.country_flags);
 }
 
+/** First regional indicator, the codepoint the letter A maps to in a flag emoji */
+const FIRST_INDICATOR = 0x1f1e6;
+
 /**
- * Regional-indicator flag for an ISO 3166-1 alpha-2 code
- * @param {string} code - Two-letter country code
- * @returns {string} Flag emoji
+ * The ISO 3166-1 alpha-2 code a flag emoji is built from: 🇧🇷 -> BR
+ * @param {string} flag - Flag emoji
+ * @returns {string} Two-letter code, or '' if this is not a flag
  */
-function flagFromCode(code) {
-	return String.fromCodePoint(...[...code].map(letter => 0x1f1e6 + letter.charCodeAt(0) - 65));
+function codeFromFlag(flag) {
+	const letters = [...String(flag ?? '')]
+		.map(character => character.codePointAt(0) - FIRST_INDICATOR)
+		.filter(offset => offset >= 0 && offset <= 25)
+		.map(offset => String.fromCharCode(65 + offset));
+
+	return letters.length === 2 ? letters.join('') : '';
 }
 
 /** @type {Object<string, string>|null} */
-let icuFlags = null;
+let icuCodes = null;
 
 /**
- * Country name -> flag for every country the runtime knows, built once. The
- * tracker's own `country_flags` covers only the countries it has publications
- * in, so entries whose only country comes from `location` (Brazil, Japan, South
- * Korea, Denmark) would otherwise show no flag at all.
+ * Country name -> alpha-2 code for every country the runtime knows, built once.
+ * The tracker's own `country_flags` covers only the countries it has
+ * publications in, so countries that reach a card any other way (Brazil, Japan,
+ * South Korea, Denmark) would otherwise resolve to nothing.
  * @returns {Object<string, string>}
  */
-function getIcuFlags() {
-	if (icuFlags) return icuFlags;
-	icuFlags = {};
+function getIcuCodes() {
+	if (icuCodes) return icuCodes;
+	icuCodes = {};
 
 	const names = typeof Intl !== 'undefined' && Intl.DisplayNames
 		? new Intl.DisplayNames(['en'], { type: 'region' })
 		: null;
-	if (!names) return icuFlags;
+	if (!names) return icuCodes;
 
 	for (let first = 65; first <= 90; first++) {
 		for (let second = 65; second <= 90; second++) {
@@ -215,25 +223,41 @@ function getIcuFlags() {
 				continue;
 			}
 			// Aliases (UK for GB, FX for France) name a country the canonical code
-			// already claimed, and only the canonical code has a flag emoji
-			if (!name || name === code || name in icuFlags) continue;
-			icuFlags[name] = flagFromCode(code);
+			// already claimed, and only the canonical code is the country's own
+			if (!name || name === code || name in icuCodes) continue;
+			icuCodes[name] = code;
 		}
 	}
-	return icuFlags;
+	return icuCodes;
+}
+
+/** Codes readers know by another name than the ISO one */
+const CODE_ALIASES = { GB: 'UK' };
+
+/**
+ * The code a country is shown by. Taken from the tracker's own flag where it has
+ * one, since a flag emoji is built from the country's code, and from the name
+ * otherwise.
+ * @param {string} country - Country name
+ * @param {Object<string, string>} [flags] - Tracker's country -> flag lookup
+ * @returns {string} Two-letter code, or '' when the name is not a known country
+ */
+export function getCountryCode(country, flags) {
+	const code = codeFromFlag(flags?.[country]) || getIcuCodes()[country] || '';
+	return CODE_ALIASES[code] || code;
 }
 
 /**
- * Flag for a country name: the tracker's own, else the one its name resolves to.
- * Names that are not countries ("Diss Express") resolve to nothing, so this
- * doubles as the test for whether a name is a real country.
- * @param {string} country - Country name
+ * What a card shows beside a name: the country's code, or a region's name with
+ * the tracker's "Region: " prefix dropped, since a region has no code.
+ * @param {string} place - Country or region name
  * @param {Object<string, string>} [flags] - Tracker's country -> flag lookup
- * @returns {string} Flag emoji, or '' when the name is not a known country
+ * @returns {string}
  */
-export function getCountryFlag(country, flags) {
-	return flags?.[country] || getIcuFlags()[country] || '';
+export function getPlaceLabel(place, flags) {
+	return getCountryCode(place, flags) || String(place ?? '').replace(REGION_LABEL, '').trim();
 }
+
 
 /**
  * @typedef {Object} CountryIndex
@@ -286,15 +310,15 @@ const REGION_LABEL = /^region\s*:/i;
 
 /**
  * A place the tracker names: a country, or one of its "Region: …" labels, which
- * are locations in their own right and simply have no flag to show. The stray
- * publication names that land in the countries field ("Diss Express") are
+ * are locations in their own right and simply have no code of their own. The
+ * stray publication names that land in the countries field ("Diss Express") are
  * neither, and are what this drops.
  * @param {string} name - Name from a countries field
  * @param {Object<string, string>} [flags] - Country -> flag lookup
  * @returns {boolean}
  */
 function isKnownPlace(name, flags) {
-	return Boolean(getCountryFlag(name, flags)) || REGION_LABEL.test(name);
+	return Boolean(getCountryCode(name, flags)) || REGION_LABEL.test(name);
 }
 
 /**
@@ -352,27 +376,23 @@ export function getCountriesForName(index, row, name) {
 }
 
 /**
- * Flags for a name shown on a card. A place with no flag of its own — the
- * tracker's "Region: …" labels — still filters and searches, it just has
- * nothing to render here.
+ * The places a name is tied to, as the codes a card shows them by
  * @param {CountryIndex} index - Dataset-wide country lookup
  * @param {Object} row - Data row the name is shown on
  * @param {string} name - Name as displayed
- * @returns {Array<{country: string, flag: string}>}
+ * @returns {Array<{country: string, label: string}>}
  */
-export function getFlagsForName(index, row, name) {
+export function getPlacesForName(index, row, name) {
 	const flags = index?.flags || getCountryFlagMap(row);
 
 	return getCountriesForName(index, row, name)
-		.map(country => ({ country, flag: getCountryFlag(country, flags) }))
-		.filter(entry => entry.flag);
+		.map(country => ({ country, label: getPlaceLabel(country, flags) }))
+		.filter(entry => entry.label);
 }
 
 /**
  * Every place a row is tied to: the interaction's own location plus the places
- * of every org and publication named on it. Places with no flag count the same
- * as the rest, so a region the tracker names is filterable even though no card
- * shows a flag for it.
+ * of every org and publication named on it.
  * @param {Object} row - Data row
  * @param {CountryIndex} [index] - Dataset-wide country lookup
  * @returns {string[]} Unique location names
