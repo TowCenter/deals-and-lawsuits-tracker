@@ -7,6 +7,7 @@
 	 * @property {string[]} [options=[]] - Available options
 	 * @property {string[]} [selectedValues=[]] - Currently selected values
 	 * @property {(values: string[]) => void} [onSelectionChange=() => {}] - Callback when selection changes
+	 * @property {Set<string>} [availableValues] - Values that can still return rows; the rest are shown greyed and cannot be picked
 	 * @property {Array<{label: string, options: string[], implied?: string[]}>} [groups] - Options under headings, in place of one flat list. A heading also selects its `implied` values, which are not listed as rows.
 	 */
 
@@ -16,7 +17,8 @@
 		options = [],
 		selectedValues = [],
 		onSelectionChange = () => {},
-		groups = null
+		groups = null,
+		availableValues = null
 	} = $props();
 
 	let isOpen = $state(false);
@@ -42,6 +44,15 @@
 		if (selectedValues.length === 0) return 'All';
 		if (selectedValues.length === 1) return selectedValues[0];
 		return `${selectedValues.length} selected`;
+	}
+
+	/**
+	 * An option that would return nothing given the other filters. A selected one
+	 * is never dead — it has to stay clickable to be turned off again.
+	 */
+	function isUnavailable(option) {
+		if (!availableValues || selectedValues.includes(option)) return false;
+		return !availableValues.has(option);
 	}
 
 	function matchesSearch(option) {
@@ -94,10 +105,11 @@
 	}
 
 	// Selecting a group selects the options in it, so the filter stays a list of
-	// countries and a continent is a shorthand for reaching them
+	// countries and a continent is a shorthand for reaching them. Dead options are
+	// left out, so a continent never selects something that returns nothing.
 	function toggleGroup(group, event) {
 		event?.stopPropagation();
-		const values = getGroupValues(group);
+		const values = getGroupValues(group).filter(value => !isUnavailable(value));
 		const { all } = getGroupState(group);
 		const newSelection = all
 			? selectedValues.filter(value => !values.includes(value))
@@ -133,12 +145,14 @@
 	<label
 		class="checkbox-label"
 		class:in-group={indented}
+		class:unavailable={isUnavailable(option)}
 		role="option"
 		aria-selected={selectedValues.includes(option)}
 	>
 		<input
 			type="checkbox"
 			checked={selectedValues.includes(option)}
+			disabled={isUnavailable(option)}
 			onchange={(e) => toggleSelection(option, e)}
 			aria-label="{option}"
 		/>
@@ -373,6 +387,20 @@
 
 	.checkbox-label:hover {
 		background-color: #f5f5f5;
+	}
+
+	/* Nothing left to find under it, given the other filters */
+	.checkbox-label.unavailable {
+		color: #bbb;
+		cursor: default;
+	}
+
+	.checkbox-label.unavailable:hover {
+		background-color: transparent;
+	}
+
+	.checkbox-label.unavailable input {
+		cursor: default;
 	}
 
 	/* A continent heading, set like the Category filter's parent rows: the box

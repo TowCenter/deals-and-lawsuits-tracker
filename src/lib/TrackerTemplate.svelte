@@ -64,6 +64,8 @@
 	let filterPlatform = $state([]);
 	let filterPublishers = $state([]);
 	let filterLocation = $state([]);
+	let showCountries = $state(false);
+	let availableValues = $state(null);
 	let filteredData = $state([]);
 
 	// CSV download function
@@ -163,6 +165,8 @@
 			bind:filterPlatform
 			bind:filterPublishers
 			bind:filterLocation
+			bind:showCountries
+			{availableValues}
 			filteredRowCount={filteredData.length}
 			onDownloadCSV={downloadToCSV}
 		/>
@@ -176,7 +180,9 @@
 			{filterPlatform}
 			{filterPublishers}
 			{filterLocation}
+			{showCountries}
 			onFilteredDataChange={(data) => { filteredData = data; }}
+			onAvailableValuesChange={(values) => { availableValues = values; }}
 		/>
 	{/if}
 </Article>

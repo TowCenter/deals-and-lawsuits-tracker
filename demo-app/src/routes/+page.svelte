@@ -165,6 +165,8 @@
     let filterPlatform = $state([]);
     let filterPublishers = $state([]);
     let filterLocation = $state([]);
+    let showCountries = $state(false);
+    let availableValues = $state(null);
     let filteredData = $state([]);
 
     // Sync filter state with URL query params so views are shareable.
@@ -377,6 +379,8 @@ The tracker is updated at the beginning of each month. Please contact <a href='m
             bind:filterPlatform
             bind:filterPublishers
             bind:filterLocation
+            bind:showCountries
+            {availableValues}
             filteredRowCount={filteredData.length}
             onDownloadCSV={downloadToCSV}
         />
@@ -390,7 +394,9 @@ The tracker is updated at the beginning of each month. Please contact <a href='m
             {filterPlatform}
             {filterPublishers}
             {filterLocation}
+            {showCountries}
             onFilteredDataChange={(data) => { filteredData = data; }}
+            onAvailableValuesChange={(values) => { availableValues = values; }}
         />
     {/if}
 </Article>

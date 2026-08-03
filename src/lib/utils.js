@@ -194,6 +194,15 @@ function codeFromFlag(flag) {
 	return letters.length === 2 ? letters.join('') : '';
 }
 
+/**
+ * The flag emoji for an ISO 3166-1 alpha-2 code: BR -> 🇧🇷
+ * @param {string} code - Two-letter country code
+ * @returns {string} Flag emoji
+ */
+function flagFromCode(code) {
+	return String.fromCodePoint(...[...code].map(letter => FIRST_INDICATOR + letter.charCodeAt(0) - 65));
+}
+
 /** @type {Object<string, string>|null} */
 let icuCodes = null;
 
@@ -259,14 +268,17 @@ export function getCountryCode(country, flags) {
 }
 
 /**
- * What a card shows beside a name: the country's code, or a region's name with
- * the tracker's "Region: " prefix dropped, since a region has no code.
+ * What a card shows beside a name: the country's flag, or a region's name with
+ * the tracker's "Region: " prefix dropped, since a region has no flag of its
+ * own. The flag is built from the country's ISO code rather than read from the
+ * tracker, so a country the payload ships no flag for still gets one.
  * @param {string} place - Country or region name
  * @param {Object<string, string>} [flags] - Tracker's country -> flag lookup
  * @returns {string}
  */
 export function getPlaceLabel(place, flags) {
-	return getCountryCode(place, flags) || String(place ?? '').replace(REGION_LABEL, '').trim();
+	const code = getIsoCode(place, flags);
+	return code ? flagFromCode(code) : String(place ?? '').replace(REGION_LABEL, '').trim();
 }
 
 /**

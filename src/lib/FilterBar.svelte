@@ -11,6 +11,8 @@
 		filterPlatform = [],
 		filterPublishers = [],
 		filterLocation = [],
+		showCountries = false,
+		availableValues = null,
 		searchQuery = '',
 		filteredRowCount = 0,
 		onDownloadCSV = () => {},
@@ -94,6 +96,10 @@
 		onFilterChange('filterLocation', selectedValues);
 	}
 
+	function handleShowCountriesChange(event) {
+		onFilterChange('showCountries', event.currentTarget.checked);
+	}
+
 	function handleSearchChange(query) {
 		onFilterChange('searchQuery', query);
 	}
@@ -125,6 +131,8 @@
 			label="Category"
 			selectedInteraction={filterInteraction}
 			selectedType={filterType}
+			availableInteractions={availableValues?.interaction}
+			availableTypes={availableValues?.type}
 			onInteractionChange={handleInteractionChange}
 			onTypeChange={handleTypeChange}
 		/>
@@ -132,6 +140,7 @@
 		<MultiSelect 
 			label="AI Company"
 			options={aiCompanyOptions}
+			availableValues={availableValues?.platform}
 			selectedValues={filterPlatform}
 			onSelectionChange={handlePlatformChange}
 		/>
@@ -139,6 +148,7 @@
 		<MultiSelect
 			label="News Org"
 			options={newsOrgOptions}
+			availableValues={availableValues?.publishers}
 			selectedValues={filterPublishers}
 			onSelectionChange={handlePublishersChange}
 		/>
@@ -150,6 +160,7 @@
 				label="Location"
 				options={locationOptions}
 				groups={locationGroups}
+				availableValues={availableValues?.location}
 				selectedValues={filterLocation}
 				onSelectionChange={handleLocationChange}
 			/>
@@ -179,12 +190,21 @@
 	</div>
 </div>
 
+<!-- Not a filter: it changes what the cards show, not which ones, so it hangs off
+     the bar rather than sitting among the controls that narrow the results -->
+<div class="filter-extension">
+	<label class="show-countries">
+		<input type="checkbox" checked={showCountries} onchange={handleShowCountriesChange} />
+		<span>Show country flags</span>
+	</label>
+</div>
+
 <style>
 	.filter-bar {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-		margin: 2rem auto;
+		margin: 2rem auto 0;
 		max-width: 900px;
 		padding: 1.5rem;
 		background-color: #fafafa;
@@ -215,6 +235,42 @@
 		min-width: 140px;
 	}
 
+	/* Hangs under the bar's right edge, sharing its ground and border so it reads
+	   as part of the panel rather than a control of its own */
+	.filter-extension {
+		max-width: 900px;
+		margin: 0 auto 2rem;
+		display: flex;
+		justify-content: flex-start;
+	}
+
+	.show-countries {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.4rem 0.9rem;
+		background-color: #fafafa;
+		border: 1px solid #e0e0e0;
+		border-top: none;
+		font-size: 0.75rem;
+		color: #555;
+		cursor: pointer;
+		user-select: none;
+		white-space: nowrap;
+	}
+
+	.show-countries:hover {
+		color: #1a1a1a;
+	}
+
+	.show-countries input {
+		margin: 0;
+		width: 13px;
+		height: 13px;
+		cursor: pointer;
+		accent-color: #DE5A35;
+	}
+
 	/* The search bar, which takes whatever the location filter and button leave */
 	.filter-row-2 > *:nth-child(2) {
 		flex: 1;
@@ -227,7 +283,7 @@
 
 	@media screen and (max-width: 768px) {
 		.filter-bar {
-			margin: 1rem;
+			margin: 1rem 1rem 0;
 			padding: 1rem;
 		}
 
@@ -250,6 +306,10 @@
 		.filter-row-2 > *:nth-child(2) {
 			flex: 0 0 auto;
 			min-width: unset;
+		}
+
+		.filter-extension {
+			margin: 0 1rem 1rem;
 		}
 
 		.download-csv-btn {

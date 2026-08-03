@@ -10,7 +10,9 @@
 	 * @property {string[]} [filterPlatform=[]] - Filter by platforms
 	 * @property {string[]} [filterPublishers=[]] - Filter by publishers
 	 * @property {string[]} [filterLocation=[]] - Filter by locations
+	 * @property {boolean} [showCountries=false] - Show the country code beside every name
 	 * @property {(data: Array<Object>) => void} [onFilteredDataChange=() => {}] - Callback when filtered data changes
+	 * @property {(values: Object<string, Set<string>>) => void} [onAvailableValuesChange=() => {}] - Callback with the values each filter can still return rows for
 	 */
 
 	/** @type {Props} */
@@ -22,13 +24,32 @@
 		filterPlatform = [],
 		filterPublishers = [],
 		filterLocation = [],
-		onFilteredDataChange = () => {}
+		showCountries = false,
+		onFilteredDataChange = () => {},
+		onAvailableValuesChange = () => {}
 	} = $props();
 
 	// Countries only show while one is being filtered on — on a card of forty
 	// titles the same code otherwise repeats down the whole column, and there is
 	// no question it answers
-	const countriesVisible = $derived(filterLocation?.length > 0);
+	const countriesVisible = $derived(showCountries || filterLocation?.length > 0);
+
+	/**
+	 * The flags a name shows. The toggle asks for every country the data gives a
+	 * name; filtering alone asks only for the country being filtered on, since
+	 * the rest are not what the reader is looking at.
+	 * @param {Object} row - Data row the name is shown on
+	 * @param {string} name - Name as displayed
+	 * @returns {Array<{country: string, label: string}>}
+	 */
+	function visiblePlaces(row, name) {
+		if (!countriesVisible) return [];
+
+		const places = getPlacesForName(countryIndex, row, name);
+		if (showCountries) return places;
+
+		return places.filter(place => filterLocation.includes(place.country));
+	}
 
 	let expandedCards = $state(new Set());
 	
@@ -519,6 +540,53 @@
 
 		return filtered;
 	}
+
+	/**
+	 * The values each filter could still return something for, judged against
+	 * every *other* filter. Excluding a filter from its own facet is what keeps
+	 * the options beside a chosen one live: picking OpenAI must not grey out
+	 * Meta, since selecting both widens the results rather than narrowing them.
+	 */
+	const availableValues = $derived.by(() => {
+		const available = {
+			interaction: new Set(),
+			type: new Set(),
+			platform: new Set(),
+			publishers: new Set(),
+			location: new Set()
+		};
+
+		for (const row of data) {
+			const values = {
+				interaction: normalizeToArray(row.interaction),
+				type: normalizeToArray(row.type),
+				platform: parseArray(row.platform),
+				publishers: getAllPublishers(row),
+				location: getRowLocations(row, countryIndex)
+			};
+			const passes = {
+				interaction: matchesFilter(values.interaction, filterInteraction),
+				type: matchesFilter(values.type, filterType),
+				platform: matchesFilter(values.platform, filterPlatform),
+				publishers: matchesFilter(values.publishers, filterPublishers),
+				location: matchesFilter(values.location, filterLocation),
+				search: matchesSearch(row, searchQuery)
+			};
+
+			for (const dimension of Object.keys(available)) {
+				const othersPass = Object.entries(passes)
+					.every(([name, ok]) => name === dimension || ok);
+				if (!othersPass) continue;
+				for (const value of values[dimension]) available[dimension].add(value);
+			}
+		}
+
+		return available;
+	});
+
+	$effect(() => {
+		onAvailableValuesChange(availableValues);
+	});
 
 	let filteredData = $derived(getFilteredAndSorted());
 	let groupedData = $derived(groupByMonth(filteredData));
@@ -1058,14 +1126,16 @@
 	}
 </script>
 
-<!-- Country codes for a name on a card; a name in several countries gets several.
-     Hovering one names the country it stands for, and the one being filtered on
-     is picked out so it is clear why an entry is in the results -->
+<!-- Country flags for a name on a card; a name in several countries gets several.
+     Hovering one names the country it stands for. While filtering, only the
+     filtered country is drawn, so a card shows what put it in the results —
+     unless the toggle asks for every country a name is in, and then the filtered
+     one is picked out among them. -->
 {#snippet countryFlags(flagRow, flagName)}
-	{#each countriesVisible ? getPlacesForName(countryIndex, flagRow, flagName) : [] as { country, label }}
+	{#each visiblePlaces(flagRow, flagName) as { country, label }}
 		<span
 			class="publication-country"
-			class:filtered={filterLocation?.includes(country)}
+			class:filtered={showCountries && filterLocation?.includes(country)}
 			role="img"
 			aria-label={country}
 			data-place={country}
@@ -2312,15 +2382,10 @@
 	   it is the name that should read first */
 	.publication-country {
 		font-style: normal;
-		margin-left: 0.35rem;
-		font-size: 0.65rem;
-		font-weight: 500;
-		letter-spacing: 0.06em;
-		color: #999;
+		margin-left: 0.25rem;
 		cursor: help;
 		position: relative;
 		display: inline-block;
-		vertical-align: 1px;
 	}
 
 	/* The country being filtered on, so it is clear which name put the entry in

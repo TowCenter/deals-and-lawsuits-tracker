@@ -18,6 +18,8 @@
 		label = 'Category',
 		selectedInteraction = [],
 		selectedType = [],
+		availableInteractions = null,
+		availableTypes = null,
 		onInteractionChange = () => {},
 		onTypeChange = () => {}
 	} = $props();
@@ -28,6 +30,15 @@
 
 	// The click has to reach the document for the other filters to notice it and
 	// close; this one stays open because its own handler sees the click inside
+	/**
+	 * A value that would return nothing given the other filters. A selected one
+	 * is never dead — it has to stay clickable to be turned off again.
+	 */
+	function isDead(value, available, selected) {
+		if (!available || selected.includes(value)) return false;
+		return !available.has(value);
+	}
+
 	function toggleOpen() {
 		isOpen = !isOpen;
 	}
@@ -235,10 +246,14 @@
 					{:else}
 						{#each filteredInteractions as interaction}
 							<div class="interaction-section">
-								<label class="interaction-item">
+								<label
+									class="interaction-item"
+									class:unavailable={isDead(interaction, availableInteractions, selectedInteraction)}
+								>
 									<input 
 										type="checkbox"
 										checked={selectedInteraction.includes(interaction)}
+										disabled={isDead(interaction, availableInteractions, selectedInteraction)}
 										onchange={() => toggleInteraction(interaction)}
 										class="checkbox"
 									/>
@@ -248,10 +263,14 @@
 								{#if shouldShowTypes(interaction)}
 									<div class="types-section">
 										{#each getFilteredTypesForInteraction(interaction) as type}
-											<label class="type-item">
+											<label
+												class="type-item"
+												class:unavailable={isDead(type, availableTypes, selectedType)}
+											>
 												<input 
 													type="checkbox"
 													checked={selectedType.includes(type)}
+													disabled={isDead(type, availableTypes, selectedType)}
 													onchange={() => toggleType(type)}
 													class="checkbox"
 												/>
@@ -433,6 +452,23 @@
 		font-size: 0.95rem;
 		user-select: none;
 		color: #333;
+	}
+
+	/* Nothing left to find under it, given the other filters */
+	.interaction-item.unavailable,
+	.type-item.unavailable {
+		color: #bbb;
+		cursor: default;
+	}
+
+	.interaction-item.unavailable:hover,
+	.type-item.unavailable:hover {
+		background-color: transparent;
+	}
+
+	.interaction-item.unavailable .checkbox,
+	.type-item.unavailable .checkbox {
+		cursor: default;
 	}
 
 	.interaction-item:hover {
