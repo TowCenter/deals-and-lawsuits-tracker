@@ -195,7 +195,7 @@
 <div class="filter-extension">
 	<label class="show-countries">
 		<input type="checkbox" checked={showCountries} onchange={handleShowCountriesChange} />
-		<span>Show country flags</span>
+		<span>Show all country flags</span>
 	</label>
 </div>
 
