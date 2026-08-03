@@ -294,7 +294,8 @@
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 		z-index: 1000;
 		max-height: 300px;
-		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
 	}
 
 	.dropdown-header {
@@ -306,6 +307,7 @@
 		font-size: 0.85rem;
 		color: #666;
 		background-color: #fff;
+		flex-shrink: 0;
 	}
 
 	.clear-all-btn {
@@ -332,6 +334,7 @@
 		box-sizing: border-box;
 		background-color: #fff;
 		color: #333;
+		flex-shrink: 0;
 	}
 
 	.dropdown-search:focus {
@@ -347,6 +350,8 @@
 	   would show the options sliding through */
 	.dropdown-options {
 		padding: 0 0 0.5rem;
+		overflow-y: auto;
+		flex: 1;
 	}
 
 	.no-results {
@@ -453,6 +458,21 @@
 
 		.multiselect-container {
 			width: 100%;
+		}
+
+		.dropdown-search {
+			font-size: 16px; /* Prevents zoom on iOS */
+		}
+
+		/* Room enough to hit with a thumb */
+		.checkbox-label {
+			padding-top: 0.75rem;
+			padding-bottom: 0.75rem;
+		}
+
+		.group-toggle {
+			padding-top: 0.75rem;
+			padding-bottom: 0.75rem;
 		}
 	}
 </style>

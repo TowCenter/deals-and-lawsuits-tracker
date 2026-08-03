@@ -514,5 +514,26 @@
 		.hierarchical-filter-container {
 			width: 100%;
 		}
+
+		/* The sheet is already capped at 70vh; a second cap here left the rest of
+		   it empty and the list scrolling in a 250px window */
+		.menu-content {
+			max-height: none;
+		}
+
+		.search-input {
+			font-size: 16px; /* Prevents zoom on iOS */
+		}
+
+		/* Room enough to hit with a thumb */
+		.interaction-item {
+			padding-top: 0.75rem;
+			padding-bottom: 0.75rem;
+		}
+
+		.type-item {
+			padding-top: 0.75rem;
+			padding-bottom: 0.75rem;
+		}
 	}
 </style>

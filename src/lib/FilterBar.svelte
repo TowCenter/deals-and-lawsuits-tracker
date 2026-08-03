@@ -236,18 +236,19 @@
 			gap: 0.75rem;
 		}
 
+		/* Stacked, so align-items now decides the width rather than the vertical
+		   alignment: without stretch, each control shrinks to its content and sits
+		   against the right edge */
 		.filter-row-2 {
 			flex-direction: column;
+			align-items: stretch;
 			gap: 0.75rem;
 		}
 
-		/* Stacked, so the flex basis would set a height rather than a width */
-		.filter-row-2 > .location-filter {
-			flex: 0 0 auto;
-			min-width: unset;
-		}
-
+		/* Stacked, so a flex basis would set a height rather than a width */
+		.filter-row-2 > .location-filter,
 		.filter-row-2 > *:nth-child(2) {
+			flex: 0 0 auto;
 			min-width: unset;
 		}
 
