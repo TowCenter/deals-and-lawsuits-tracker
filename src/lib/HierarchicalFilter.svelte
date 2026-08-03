@@ -26,8 +26,9 @@
 	let searchTerm = $state('');
 	let container;
 
-	function toggleOpen(event) {
-		event.stopPropagation();
+	// The click has to reach the document for the other filters to notice it and
+	// close; this one stays open because its own handler sees the click inside
+	function toggleOpen() {
 		isOpen = !isOpen;
 	}
 

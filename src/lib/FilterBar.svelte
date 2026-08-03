@@ -2,7 +2,7 @@
 	import SearchBar from './SearchBar.svelte';
 	import MultiSelect from './MultiSelect.svelte';
 	import HierarchicalFilter from './HierarchicalFilter.svelte';
-	import { getColumnKey, parseArray, buildCountryIndex, getRowLocations } from './utils.js';
+	import { getColumnKey, parseArray, buildCountryIndex, getRowLocations, groupPlacesByRegion } from './utils.js';
 
 	let {
 		data = [],
@@ -114,6 +114,8 @@
 		});
 		return Array.from(unique).sort();
 	});
+
+	const locationGroups = $derived(groupPlacesByRegion(locationOptions, countryIndex.flags));
 </script>
 
 <div class="filter-bar">
@@ -147,6 +149,7 @@
 			<MultiSelect
 				label="Location"
 				options={locationOptions}
+				groups={locationGroups}
 				selectedValues={filterLocation}
 				onSelectionChange={handleLocationChange}
 			/>

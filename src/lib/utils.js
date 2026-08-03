@@ -235,15 +235,26 @@ function getIcuCodes() {
 const CODE_ALIASES = { GB: 'UK' };
 
 /**
- * The code a country is shown by. Taken from the tracker's own flag where it has
- * one, since a flag emoji is built from the country's code, and from the name
- * otherwise.
+ * The ISO code a country resolves to. Taken from the tracker's own flag where it
+ * has one, since a flag emoji is built from the country's code, and from the
+ * name otherwise.
+ * @param {string} country - Country name
+ * @param {Object<string, string>} [flags] - Tracker's country -> flag lookup
+ * @returns {string} Two-letter code, or '' when the name is not a known country
+ */
+function getIsoCode(country, flags) {
+	return codeFromFlag(flags?.[country]) || getIcuCodes()[country] || '';
+}
+
+/**
+ * The code a country is shown by, which is its ISO code except where readers
+ * know it by another (the United Kingdom is UK on a card, not GB).
  * @param {string} country - Country name
  * @param {Object<string, string>} [flags] - Tracker's country -> flag lookup
  * @returns {string} Two-letter code, or '' when the name is not a known country
  */
 export function getCountryCode(country, flags) {
-	const code = codeFromFlag(flags?.[country]) || getIcuCodes()[country] || '';
+	const code = getIsoCode(country, flags);
 	return CODE_ALIASES[code] || code;
 }
 
@@ -256,6 +267,55 @@ export function getCountryCode(country, flags) {
  */
 export function getPlaceLabel(place, flags) {
 	return getCountryCode(place, flags) || String(place ?? '').replace(REGION_LABEL, '').trim();
+}
+
+/**
+ * The regions the Location filter sorts its countries into, as ISO alpha-2
+ * codes. Geographic rather than political — the United Kingdom belongs under
+ * Europe whether or not it is in the EU — and wider than the countries the
+ * tracker covers today, so a country appearing for the first time lands
+ * somewhere sensible rather than under Elsewhere.
+ */
+const REGIONS = [
+	['North America', 'US CA'],
+	['Latin America', 'MX BR AR CL CO PE VE EC BO PY UY CR PA GT HN SV NI DO CU PR JM TT'],
+	['Europe', 'GB IE FR DE ES IT PT NL BE LU CH AT DK SE NO FI IS IM GR CY MT PL CZ SK HU RO BG HR SI EE LV LT UA RS BA AL MK ME MD BY RU LI MC AD SM VA GI FO'],
+	['Middle East & Africa', 'IL AE SA QA KW BH OM JO LB EG TR IR IQ ZA NG KE GH MA TN DZ ET UG TZ SN CI CM ZW ZM RW BW NA MU'],
+	['Asia Pacific', 'AU NZ JP KR CN HK TW SG MY ID TH PH VN IN PK BD LK NP MM KH LA MN FJ PG MO BN']
+];
+
+/** Where a place goes when it is in none of the regions above */
+const ELSEWHERE = 'Elsewhere';
+
+/**
+ * Groups place names into regions for the Location filter. A place that names a
+ * region rather than a country ("Europe", "Region: Middle East") joins the
+ * region it names, so it sits with the countries it covers.
+ * @param {string[]} places - Place names as the filter lists them
+ * @param {Object<string, string>} [flags] - Country -> flag lookup
+ * @returns {Array<{label: string, options: string[]}>} Regions, in order, without the empty ones
+ */
+export function groupPlacesByRegion(places, flags) {
+	const grouped = new Map(REGIONS.map(([label]) => [label, []]));
+	grouped.set(ELSEWHERE, []);
+
+	for (const place of places) {
+		const code = getIsoCode(place, flags);
+		const named = getPlaceLabel(place, flags).toLowerCase();
+
+		const region = REGIONS.find(([label, codes]) =>
+			code
+				? codes.split(' ').includes(code)
+				// "Middle East" is the region "Middle East & Africa" goes by here
+				: label.toLowerCase().startsWith(named)
+		);
+
+		grouped.get(region ? region[0] : ELSEWHERE).push(place);
+	}
+
+	return [...grouped]
+		.filter(([, options]) => options.length > 0)
+		.map(([label, options]) => ({ label, options: options.sort() }));
 }
 
 

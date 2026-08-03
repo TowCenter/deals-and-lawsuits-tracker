@@ -7,6 +7,7 @@
 	 * @property {string[]} [options=[]] - Available options
 	 * @property {string[]} [selectedValues=[]] - Currently selected values
 	 * @property {(values: string[]) => void} [onSelectionChange=() => {}] - Callback when selection changes
+	 * @property {Array<{label: string, options: string[]}>} [groups] - Options under headings, in place of one flat list
 	 */
 
 	/** @type {Props} */
@@ -14,11 +15,13 @@
 		label = 'Select',
 		options = [],
 		selectedValues = [],
-		onSelectionChange = () => {}
+		onSelectionChange = () => {},
+		groups = null
 	} = $props();
 
 	let isOpen = $state(false);
 	let searchQuery = $state('');
+	let openGroups = $state(new Set());
 	let containerRef;
 	let buttonRef;
 
@@ -41,10 +44,53 @@
 		return `${selectedValues.length} selected`;
 	}
 
+	function matchesSearch(option) {
+		if (!searchQuery) return true;
+		return option.toLowerCase().includes(searchQuery.toLowerCase());
+	}
+
 	function getFilteredOptions() {
-		if (!searchQuery) return options;
-		const query = searchQuery.toLowerCase();
-		return options.filter(option => option.toLowerCase().includes(query));
+		return options.filter(matchesSearch);
+	}
+
+	/** Groups with their non-matching options dropped, and the emptied ones with them */
+	function getFilteredGroups() {
+		if (!groups) return [];
+		return groups
+			.map(group => ({ ...group, options: group.options.filter(matchesSearch) }))
+			.filter(group => group.options.length > 0);
+	}
+
+	/** Whether all, some or none of a group's options are selected */
+	function getGroupState(group) {
+		const chosen = group.options.filter(option => selectedValues.includes(option)).length;
+		return { all: chosen === group.options.length, some: chosen > 0 };
+	}
+
+	/**
+	 * Groups start closed, and open when opened by hand, when something in them
+	 * is selected, or when a search has narrowed them to what it matched
+	 */
+	function isGroupOpen(group) {
+		return openGroups.has(group.label) || Boolean(searchQuery) || getGroupState(group).some;
+	}
+
+	function toggleGroupOpen(group) {
+		const next = new Set(openGroups);
+		if (next.has(group.label)) next.delete(group.label);
+		else next.add(group.label);
+		openGroups = next;
+	}
+
+	// Selecting a region selects the countries in it, so the filter stays a list
+	// of countries and a region is a shorthand for reaching them
+	function toggleGroup(group, event) {
+		event?.stopPropagation();
+		const { all } = getGroupState(group);
+		const newSelection = all
+			? selectedValues.filter(value => !group.options.includes(value))
+			: [...selectedValues, ...group.options.filter(option => !selectedValues.includes(option))];
+		onSelectionChange(newSelection);
 	}
 
 	function handleClickOutside(event) {
@@ -69,6 +115,24 @@
 		};
 	});
 </script>
+
+<!-- One selectable option, indented when it sits under a group heading -->
+{#snippet optionRow(option, indented)}
+	<label
+		class="checkbox-label"
+		class:in-group={indented}
+		role="option"
+		aria-selected={selectedValues.includes(option)}
+	>
+		<input
+			type="checkbox"
+			checked={selectedValues.includes(option)}
+			onchange={(e) => toggleSelection(option, e)}
+			aria-label="{option}"
+		/>
+		<span>{option}</span>
+	</label>
+{/snippet}
 
 <div class="multiselect-container" bind:this={containerRef}>
 	<label class="multiselect-label" for="multiselect-trigger-{label}">{label}</label>
@@ -110,19 +174,46 @@
 				aria-label="Search options"
 			/>
 			<div class="dropdown-options" role="group">
-				{#each getFilteredOptions() as option (option)}
-					<label class="checkbox-label" role="option" aria-selected={selectedValues.includes(option)}>
-						<input
-							type="checkbox"
-							checked={selectedValues.includes(option)}
-							onchange={(e) => toggleSelection(option, e)}
-							aria-label="{option}"
-						/>
-						<span>{option}</span>
-					</label>
+				{#if groups}
+					{#each getFilteredGroups() as group (group.label)}
+						{@const state = getGroupState(group)}
+						{@const open = isGroupOpen(group)}
+						<div class="group-label">
+							<input
+								type="checkbox"
+								checked={state.all}
+								indeterminate={state.some && !state.all}
+								onchange={(e) => toggleGroup(group, e)}
+								aria-label="Select all {group.options.length} in {group.label}"
+							/>
+							<button
+								type="button"
+								class="group-toggle"
+								onclick={() => toggleGroupOpen(group)}
+								aria-expanded={open}
+							>
+								<span class="group-name">{group.label}</span>
+								<span class="group-count">{group.options.length}</span>
+								<span class="group-arrow" class:open aria-hidden="true">▼</span>
+							</button>
+						</div>
+						{#if open}
+							<div class="group-options">
+								{#each group.options as option (option)}
+									{@render optionRow(option, true)}
+								{/each}
+							</div>
+						{/if}
+					{:else}
+						<div class="no-results" role="status">No results found</div>
+					{/each}
 				{:else}
-					<div class="no-results" role="status">No results found</div>
-				{/each}
+					{#each getFilteredOptions() as option (option)}
+						{@render optionRow(option, false)}
+					{:else}
+						<div class="no-results" role="status">No results found</div>
+					{/each}
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -238,8 +329,10 @@
 		color: #999;
 	}
 
+	/* No padding at the top: a group heading sticks there, and a gap above it
+	   would show the options sliding through */
 	.dropdown-options {
-		padding: 0.5rem 0;
+		padding: 0 0 0.5rem;
 	}
 
 	.no-results {
@@ -260,6 +353,77 @@
 
 	.checkbox-label:hover {
 		background-color: #f5f5f5;
+	}
+
+	/* A region heading: the box selects every country under it, the rest of the
+	   row opens the region. Sticks to the top of the list so the region stays
+	   named while its countries scroll past */
+	.group-label {
+		display: flex;
+		align-items: center;
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		background-color: #fff;
+		border-bottom: 1px solid #eee;
+		padding: 0 0.8rem;
+	}
+
+	.group-label input[type="checkbox"] {
+		margin-right: 0.5rem;
+		cursor: pointer;
+		accent-color: #DE5A35;
+	}
+
+	.group-toggle {
+		display: flex;
+		align-items: center;
+		flex: 1;
+		gap: 0.5rem;
+		padding: 0.55rem 0;
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-family: inherit;
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: #555;
+		text-align: left;
+	}
+
+	.group-toggle:hover {
+		color: #1a1a1a;
+	}
+
+	.group-name {
+		flex: 1;
+	}
+
+	.group-count {
+		font-weight: 400;
+		color: #aaa;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.group-arrow {
+		font-size: 0.55rem;
+		color: #999;
+		transition: transform 0.2s;
+	}
+
+	.group-arrow.open {
+		transform: rotate(180deg);
+	}
+
+	/* The countries of an open region, tinted and indented as its children */
+	.group-options {
+		background-color: #fafafa;
+	}
+
+	.in-group {
+		padding-left: 2rem;
 	}
 
 	.checkbox-label input[type="checkbox"] {
