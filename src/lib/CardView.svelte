@@ -1972,6 +1972,15 @@
 		.card-header.expanded {
 			justify-content: flex-end;
 		}
+
+		/* Expanded, the tags are the only thing setting the header's height, and
+		   the date is out of the flow at the padding edge — 3.7px above their
+		   centre, since the tag row is the taller of the two. Centring the date
+		   in the header is the same as centring it against them. */
+		.card-header.expanded > .header-date {
+			top: 50%;
+			transform: translateY(-50%);
+		}
 	}
 
 	.interaction-tags {
