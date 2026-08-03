@@ -270,52 +270,55 @@ export function getPlaceLabel(place, flags) {
 }
 
 /**
- * The regions the Location filter sorts its countries into, as ISO alpha-2
- * codes. Geographic rather than political — the United Kingdom belongs under
- * Europe whether or not it is in the EU — and wider than the countries the
- * tracker covers today, so a country appearing for the first time lands
- * somewhere sensible rather than under Elsewhere.
+ * The continents the Location filter sorts its countries into, as ISO alpha-2
+ * codes. Each list runs wider than the countries the tracker covers today, so a
+ * country appearing for the first time lands on its continent rather than under
+ * Elsewhere. Central America and the Caribbean are part of North America, and
+ * the Middle East part of Asia, as continents have it.
  */
-const REGIONS = [
-	['North America', 'US CA'],
-	['Latin America', 'MX BR AR CL CO PE VE EC BO PY UY CR PA GT HN SV NI DO CU PR JM TT'],
+const CONTINENTS = [
+	['Africa', 'ZA NG KE GH MA TN DZ EG ET UG TZ SN CI CM ZW ZM RW BW NA MU LY SD AO MZ MW ML BF NE TD SO GA CG CD'],
+	['Asia', 'JP KR CN HK TW SG MY ID TH PH VN IN PK BD LK NP MM KH LA MN MO BN IL AE SA QA KW BH OM JO LB TR IR IQ SY YE AF KZ UZ GE AM AZ'],
 	['Europe', 'GB IE FR DE ES IT PT NL BE LU CH AT DK SE NO FI IS IM GR CY MT PL CZ SK HU RO BG HR SI EE LV LT UA RS BA AL MK ME MD BY RU LI MC AD SM VA GI FO'],
-	['Middle East & Africa', 'IL AE SA QA KW BH OM JO LB EG TR IR IQ ZA NG KE GH MA TN DZ ET UG TZ SN CI CM ZW ZM RW BW NA MU'],
-	['Asia Pacific', 'AU NZ JP KR CN HK TW SG MY ID TH PH VN IN PK BD LK NP MM KH LA MN FJ PG MO BN']
+	['North America', 'US CA MX GT HN SV NI CR PA CU DO HT JM PR TT BS BB BZ'],
+	['Oceania', 'AU NZ FJ PG SB VU WS TO NC PF'],
+	['South America', 'BR AR CL CO PE VE EC BO PY UY GY SR']
 ];
 
-/** Where a place goes when it is in none of the regions above */
+/** Where a place goes when it is on none of the continents above */
 const ELSEWHERE = 'Elsewhere';
 
 /**
- * Groups place names into regions for the Location filter. A place that names a
- * region rather than a country ("Europe", "Region: Middle East") joins the
- * region it names, so it sits with the countries it covers.
+ * Groups place names by continent for the Location filter. A place that names a
+ * continent rather than a country ("Europe", which entries in the CJEU carry)
+ * is not listed under itself — it becomes part of what that continent's heading
+ * selects, so choosing Europe means the European countries and Europe itself.
  * @param {string[]} places - Place names as the filter lists them
  * @param {Object<string, string>} [flags] - Country -> flag lookup
- * @returns {Array<{label: string, options: string[]}>} Regions, in order, without the empty ones
+ * @returns {Array<{label: string, options: string[], implied: string[]}>} Continents, in order, without the empty ones
  */
-export function groupPlacesByRegion(places, flags) {
-	const grouped = new Map(REGIONS.map(([label]) => [label, []]));
-	grouped.set(ELSEWHERE, []);
+export function groupPlacesByContinent(places, flags) {
+	const grouped = new Map([...CONTINENTS.map(([label]) => [label, []]), [ELSEWHERE, []]]);
+	const implied = new Map([...grouped.keys()].map(label => [label, []]));
 
 	for (const place of places) {
 		const code = getIsoCode(place, flags);
 		const named = getPlaceLabel(place, flags).toLowerCase();
 
-		const region = REGIONS.find(([label, codes]) =>
-			code
-				? codes.split(' ').includes(code)
-				// "Middle East" is the region "Middle East & Africa" goes by here
-				: label.toLowerCase().startsWith(named)
+		const continent = CONTINENTS.find(([label, codes]) =>
+			code ? codes.split(' ').includes(code) : label.toLowerCase() === named
 		);
 
-		grouped.get(region ? region[0] : ELSEWHERE).push(place);
+		// Only a place that reached its continent by naming it is folded into the
+		// heading; one that simply has no continent stays a row of its own
+		const namesItsContinent = Boolean(continent) && !code;
+		const label = continent ? continent[0] : ELSEWHERE;
+		(namesItsContinent ? implied : grouped).get(label).push(place);
 	}
 
 	return [...grouped]
-		.filter(([, options]) => options.length > 0)
-		.map(([label, options]) => ({ label, options: options.sort() }));
+		.filter(([label, options]) => options.length > 0 || implied.get(label).length > 0)
+		.map(([label, options]) => ({ label, options: options.sort(), implied: implied.get(label).sort() }));
 }
 
 

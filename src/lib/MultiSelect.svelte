@@ -7,7 +7,7 @@
 	 * @property {string[]} [options=[]] - Available options
 	 * @property {string[]} [selectedValues=[]] - Currently selected values
 	 * @property {(values: string[]) => void} [onSelectionChange=() => {}] - Callback when selection changes
-	 * @property {Array<{label: string, options: string[]}>} [groups] - Options under headings, in place of one flat list
+	 * @property {Array<{label: string, options: string[], implied?: string[]}>} [groups] - Options under headings, in place of one flat list. A heading also selects its `implied` values, which are not listed as rows.
 	 */
 
 	/** @type {Props} */
@@ -53,18 +53,29 @@
 		return options.filter(matchesSearch);
 	}
 
-	/** Groups with their non-matching options dropped, and the emptied ones with them */
+	/**
+	 * Groups with their non-matching options dropped, and the emptied ones with
+	 * them. A group whose own name matches keeps everything under it.
+	 */
 	function getFilteredGroups() {
 		if (!groups) return [];
 		return groups
-			.map(group => ({ ...group, options: group.options.filter(matchesSearch) }))
-			.filter(group => group.options.length > 0);
+			.map(group => (matchesSearch(group.label)
+				? group
+				: { ...group, options: group.options.filter(matchesSearch) }))
+			.filter(group => group.options.length > 0 || matchesSearch(group.label));
 	}
 
-	/** Whether all, some or none of a group's options are selected */
+	/** Everything a group's heading selects, including what it stands in for */
+	function getGroupValues(group) {
+		return [...group.options, ...(group.implied || [])];
+	}
+
+	/** Whether all, some or none of what a group covers is selected */
 	function getGroupState(group) {
-		const chosen = group.options.filter(option => selectedValues.includes(option)).length;
-		return { all: chosen === group.options.length, some: chosen > 0 };
+		const values = getGroupValues(group);
+		const chosen = values.filter(value => selectedValues.includes(value)).length;
+		return { all: chosen === values.length, some: chosen > 0 };
 	}
 
 	/**
@@ -82,14 +93,15 @@
 		openGroups = next;
 	}
 
-	// Selecting a region selects the countries in it, so the filter stays a list
-	// of countries and a region is a shorthand for reaching them
+	// Selecting a group selects the options in it, so the filter stays a list of
+	// countries and a continent is a shorthand for reaching them
 	function toggleGroup(group, event) {
 		event?.stopPropagation();
+		const values = getGroupValues(group);
 		const { all } = getGroupState(group);
 		const newSelection = all
-			? selectedValues.filter(value => !group.options.includes(value))
-			: [...selectedValues, ...group.options.filter(option => !selectedValues.includes(option))];
+			? selectedValues.filter(value => !values.includes(value))
+			: [...selectedValues, ...values.filter(value => !selectedValues.includes(value))];
 		onSelectionChange(newSelection);
 	}
 
@@ -184,7 +196,7 @@
 								checked={state.all}
 								indeterminate={state.some && !state.all}
 								onchange={(e) => toggleGroup(group, e)}
-								aria-label="Select all {group.options.length} in {group.label}"
+								aria-label="Select all of {group.label}"
 							/>
 							<button
 								type="button"
@@ -193,7 +205,6 @@
 								aria-expanded={open}
 							>
 								<span class="group-name">{group.label}</span>
-								<span class="group-count">{group.options.length}</span>
 								<span class="group-arrow" class:open aria-hidden="true">▼</span>
 							</button>
 						</div>
@@ -287,27 +298,28 @@
 	}
 
 	.dropdown-header {
-		padding: 0.75rem 0.8rem;
+		padding: 0.6rem 0.8rem;
 		border-bottom: 1px solid #eee;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		font-size: 0.85rem;
-		background-color: #f9f9f9;
+		color: #666;
+		background-color: #fff;
 	}
 
 	.clear-all-btn {
 		background: none;
 		border: none;
-		color: #254c6f;
+		color: #0066cc;
 		cursor: pointer;
-		font-size: 0.8rem;
+		font-size: 0.85rem;
 		padding: 0;
-		text-decoration: underline;
 	}
 
 	.clear-all-btn:hover {
-		color: #1a3a52;
+		color: #0052a3;
+		text-decoration: underline;
 	}
 
 	.dropdown-search {
@@ -318,6 +330,8 @@
 		font-size: 0.9rem;
 		font-family: inherit;
 		box-sizing: border-box;
+		background-color: #fff;
+		color: #333;
 	}
 
 	.dropdown-search:focus {
@@ -349,15 +363,16 @@
 		cursor: pointer;
 		font-size: 0.95rem;
 		user-select: none;
+		color: #333;
 	}
 
 	.checkbox-label:hover {
 		background-color: #f5f5f5;
 	}
 
-	/* A region heading: the box selects every country under it, the rest of the
-	   row opens the region. Sticks to the top of the list so the region stays
-	   named while its countries scroll past */
+	/* A continent heading, set like the Category filter's parent rows: the box
+	   selects every country under it, the rest of the row opens it. Sticks to the
+	   top so the continent stays named while its countries scroll past */
 	.group-label {
 		display: flex;
 		align-items: center;
@@ -365,14 +380,11 @@
 		top: 0;
 		z-index: 1;
 		background-color: #fff;
-		border-bottom: 1px solid #eee;
 		padding: 0 0.8rem;
 	}
 
-	.group-label input[type="checkbox"] {
-		margin-right: 0.5rem;
-		cursor: pointer;
-		accent-color: #DE5A35;
+	.group-label:hover {
+		background-color: #f5f5f5;
 	}
 
 	.group-toggle {
@@ -380,35 +392,23 @@
 		align-items: center;
 		flex: 1;
 		gap: 0.5rem;
-		padding: 0.55rem 0;
+		padding: 0.5rem 0;
 		background: none;
 		border: none;
 		cursor: pointer;
 		font-family: inherit;
-		font-size: 0.7rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: #555;
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: #333;
 		text-align: left;
-	}
-
-	.group-toggle:hover {
-		color: #1a1a1a;
 	}
 
 	.group-name {
 		flex: 1;
 	}
 
-	.group-count {
-		font-weight: 400;
-		color: #aaa;
-		font-variant-numeric: tabular-nums;
-	}
-
 	.group-arrow {
-		font-size: 0.55rem;
+		font-size: 0.6rem;
 		color: #999;
 		transition: transform 0.2s;
 	}
@@ -417,7 +417,7 @@
 		transform: rotate(180deg);
 	}
 
-	/* The countries of an open region, tinted and indented as its children */
+	/* The countries of an open continent, tinted and indented as its children */
 	.group-options {
 		background-color: #fafafa;
 	}
@@ -426,10 +426,13 @@
 		padding-left: 2rem;
 	}
 
-	.checkbox-label input[type="checkbox"] {
+	.dropdown-options input[type="checkbox"] {
+		width: 16px;
+		height: 16px;
 		margin-right: 0.5rem;
 		cursor: pointer;
 		accent-color: #DE5A35;
+		flex-shrink: 0;
 	}
 
 	.checkbox-label span {
