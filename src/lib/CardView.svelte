@@ -225,10 +225,10 @@
 			return; // Don't collapse if text is selected
 		}
 		
-		// Don't collapse if clicking on links or the collapse button (let them work normally)
+		// Don't collapse if clicking a link (let it work normally)
 		const target = event.target;
-		if (target.tagName === 'A' || target.closest('a') || target.closest('.collapse-button')) {
-			return; // Let links and collapse button work normally
+		if (target.tagName === 'A' || target.closest('a')) {
+			return;
 		}
 		// Collapse the card when clicking anywhere else
 		toggleExpandCard(rowId);
@@ -1135,10 +1135,11 @@
 				class:has-multiple-interactions={interactionTypes.length > 1}
 				style={borderGradient ? `--border-gradient: ${borderGradient};` : ''}
 			>
-								<!-- Colored Header -->
-								{#if !isCardExpanded(row.id)}
+									<!-- Colored Header. Expanding drops the names, which the card
+									     then lists in full below, and keeps the date and the tags -->
 								<div 
 									class="card-header {interactionType}"
+										class:expanded={isCardExpanded(row.id)}
 									onclick={() => toggleExpandCard(row.id)}
 									role="button"
 									tabindex="0"
@@ -1147,6 +1148,7 @@
 									{#if row.date}
 										<div class="header-date">{formatDate(row.date)}</div>
 									{/if}
+									{#if !isCardExpanded(row.id)}
 									<div class="header-content">
 										{#if interactionType === 'lawsuit'}
 											<div class="header-left">
@@ -1182,6 +1184,7 @@
 											</div>
 										{/if}
 								</div>
+									{/if}
 									<div class="header-right">
 										<div class="interaction-tags">
 											{#each interactionTypes as interaction}
@@ -1193,14 +1196,6 @@
 										<span class="expand-icon">{isCardExpanded(row.id) ? '−' : '+'}</span>
 						</div>
 						</div>
-					{/if}
-					
-								<!-- Collapse control: sits where the header's expand icon was -->
-								{#if isCardExpanded(row.id)}
-									<div class="collapse-button" onclick={(e) => { e.stopPropagation(); toggleExpandCard(row.id); }} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && toggleExpandCard(row.id)}>
-										<span class="expand-icon">−</span>
-									</div>
-								{/if}
 
 								<!-- Two Column Layout -->
 								{#if isCardExpanded(row.id)}
@@ -1614,9 +1609,20 @@
 		padding-left: 0;
 	}
 
+	/* Expanded there are no names below, so the rule under the tags would sit
+	   directly on the header's own bottom border */
+	.card-header.expanded .header-right {
+		margin-bottom: 0;
+		padding-bottom: 0;
+		border-bottom: none;
+	}
+
+	/* 1.2rem to match the date above it, which is absolutely placed at that left.
+	   The !important is holding off the desktop 5rem indent, declared later in
+	   the file at the same specificity. */
 	.header-content {
 		gap: 0;
-		margin-left: 1.1rem !important;
+		margin-left: 1.2rem !important;
 		margin-bottom: 1.1rem;
 		padding-left: 0;
 		width: 100%;
@@ -1848,6 +1854,9 @@
 		position: relative;
 	}
 
+	/* Lifted out of the flow so it can sit at the header's left edge without the
+	   names having to leave room for it. This wins on mobile too, where the
+	   header stacks — the names there are indented to match its 1.2rem. */
 	.card-header > .header-date {
 		position: absolute;
 		left: 1.2rem;
@@ -1955,6 +1964,16 @@
 		align-self: flex-start;
 	}
 
+	/* Expanded, the names are gone and the date is absolutely placed, so the tags
+	   are the only item left in flow — and space-between puts a lone item at the
+	   start, on top of the date. Scoped wide, since on mobile the header is a
+	   column where justify-content would distribute vertically instead. */
+	@media screen and (min-width: 769px) {
+		.card-header.expanded {
+			justify-content: flex-end;
+		}
+	}
+
 	.interaction-tags {
 		display: flex;
 		flex-wrap: wrap;
@@ -2047,30 +2066,6 @@
 
 	/* Anchored to the card, not the content, so it lands on the same spot
 	   the header's expand icon occupies when the card is collapsed. */
-	.collapse-button {
-		position: absolute;
-		top: 0.5rem;
-		right: 0.7rem;
-		cursor: pointer;
-		user-select: none;
-		z-index: 10;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		border-radius: 4px;
-		transition: background-color 0.2s ease;
-	}
-
-	.collapse-button:hover {
-		background-color: #f5f5f5;
-	}
-
-	.collapse-button .expand-icon {
-		font-size: 1rem;
-		color: #666;
-	}
 
 	.card-column {
 		display: flex;
