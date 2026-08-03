@@ -158,3 +158,243 @@ export function matchesSearch(text, query) {
 	return String(text).toLowerCase().includes(query.toLowerCase());
 }
 
+/**
+ * Returns a plain object field, or {} for anything else (arrays, null, strings)
+ * @param {any} value - Value to read
+ * @returns {Object<string, any>}
+ */
+function asPlainObject(value) {
+	return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+/**
+ * Country name -> flag emoji, as carried by a row. Only real countries appear
+ * here, so it doubles as the row's list of recognised country names.
+ * @param {Object} row - Data row
+ * @returns {Object<string, string>}
+ */
+export function getCountryFlagMap(row) {
+	return asPlainObject(row?.country_flags);
+}
+
+/**
+ * Regional-indicator flag for an ISO 3166-1 alpha-2 code
+ * @param {string} code - Two-letter country code
+ * @returns {string} Flag emoji
+ */
+function flagFromCode(code) {
+	return String.fromCodePoint(...[...code].map(letter => 0x1f1e6 + letter.charCodeAt(0) - 65));
+}
+
+/** @type {Object<string, string>|null} */
+let icuFlags = null;
+
+/**
+ * Country name -> flag for every country the runtime knows, built once. The
+ * tracker's own `country_flags` covers only the countries it has publications
+ * in, so entries whose only country comes from `location` (Brazil, Japan, South
+ * Korea, Denmark) would otherwise show no flag at all.
+ * @returns {Object<string, string>}
+ */
+function getIcuFlags() {
+	if (icuFlags) return icuFlags;
+	icuFlags = {};
+
+	const names = typeof Intl !== 'undefined' && Intl.DisplayNames
+		? new Intl.DisplayNames(['en'], { type: 'region' })
+		: null;
+	if (!names) return icuFlags;
+
+	for (let first = 65; first <= 90; first++) {
+		for (let second = 65; second <= 90; second++) {
+			const code = String.fromCharCode(first, second);
+			let name;
+			try {
+				name = names.of(code);
+			} catch {
+				continue;
+			}
+			// Aliases (UK for GB, FX for France) name a country the canonical code
+			// already claimed, and only the canonical code has a flag emoji
+			if (!name || name === code || name in icuFlags) continue;
+			icuFlags[name] = flagFromCode(code);
+		}
+	}
+	return icuFlags;
+}
+
+/**
+ * Flag for a country name: the tracker's own, else the one its name resolves to.
+ * Names that are not countries ("Diss Express") resolve to nothing, so this
+ * doubles as the test for whether a name is a real country.
+ * @param {string} country - Country name
+ * @param {Object<string, string>} [flags] - Tracker's country -> flag lookup
+ * @returns {string} Flag emoji, or '' when the name is not a known country
+ */
+export function getCountryFlag(country, flags) {
+	return flags?.[country] || getIcuFlags()[country] || '';
+}
+
+/**
+ * @typedef {Object} CountryIndex
+ * @property {Object<string, string>} flags - Country name -> flag emoji
+ * @property {Map<string, string[]>} publications - Publication name -> countries
+ */
+
+/**
+ * Builds a dataset-wide country lookup, so a name keyed with a country on one
+ * entry keeps it on the entries that name it without one. Only the countries
+ * the data states are collected; nothing is inherited between a parent org and
+ * the publications under it, in either direction.
+ * @param {Array<Object>} data - All data rows
+ * @returns {CountryIndex}
+ */
+export function buildCountryIndex(data) {
+	const rows = Array.isArray(data) ? data : [];
+	const flags = {};
+	for (const row of rows) {
+		Object.assign(flags, getCountryFlagMap(row));
+	}
+
+	const publications = new Map();
+	for (const row of rows) {
+		for (const [name, countries] of Object.entries(asPlainObject(row?.publication_countries))) {
+			addCountries(publications, String(name).trim(), knownCountries(countries, flags));
+		}
+	}
+
+	return { flags, publications };
+}
+
+/**
+ * Merges countries into a name's entry, keeping them unique and ordered
+ * @param {Map<string, string[]>} target - Name -> countries
+ * @param {string} name - Name to merge into
+ * @param {string[]} countries - Countries to add
+ */
+function addCountries(target, name, countries) {
+	if (!name || countries.length === 0) return;
+	const merged = target.get(name) || [];
+	for (const country of countries) {
+		if (!merged.includes(country)) merged.push(country);
+	}
+	target.set(name, merged);
+}
+
+/** The tracker's own label for a place that is not one country ("Region: Adria") */
+const REGION_LABEL = /^region\s*:/i;
+
+/**
+ * A place the tracker names: a country, or one of its "Region: …" labels, which
+ * are locations in their own right and simply have no flag to show. The stray
+ * publication names that land in the countries field ("Diss Express") are
+ * neither, and are what this drops.
+ * @param {string} name - Name from a countries field
+ * @param {Object<string, string>} [flags] - Country -> flag lookup
+ * @returns {boolean}
+ */
+function isKnownPlace(name, flags) {
+	return Boolean(getCountryFlag(name, flags)) || REGION_LABEL.test(name);
+}
+
+/**
+ * Keeps only the names that are places the tracker names
+ * @param {any} countries - Country names in any shape
+ * @param {Object<string, string>} flags - Country -> flag lookup
+ * @returns {string[]}
+ */
+function knownCountries(countries, flags) {
+	return parseArray(countries)
+		.map(country => String(country).trim())
+		.filter(country => country && isKnownPlace(country, flags));
+}
+
+/**
+ * Countries the data names for this name: its own on this row, else the ones it
+ * carries anywhere in the dataset. A parent org inherits nothing from the
+ * publications under it — USA Today Co. has no country of its own in the data,
+ * so it shows none, however many countries Newsquest and USA Today are in.
+ * @param {CountryIndex} index - Dataset-wide country lookup
+ * @param {Object} row - Data row
+ * @param {string} name - Name as displayed
+ * @returns {string[]}
+ */
+function lookupCountries(index, row, name) {
+	const flags = index?.flags || getCountryFlagMap(row);
+	const rowMap = asPlainObject(row?.publication_countries);
+
+	// Display names are trimmed, the keys they came from may not be
+	const rowKey = Object.keys(rowMap).find(key => String(key).trim() === name);
+	if (rowKey !== undefined) {
+		const known = knownCountries(rowMap[rowKey], flags);
+		if (known.length > 0) return known;
+	}
+
+	return index?.publications?.get(name) || [];
+}
+
+/**
+ * Places a name shown on a card is tied to — a publication, an intermediate org,
+ * or a top-level news org. Names in several countries (PC Gamer, The Week) get
+ * one entry per country. A name the data lists no country against has none: the
+ * entry's own location is not borrowed for it, and nothing is guessed from the
+ * name itself.
+ * @param {CountryIndex} index - Dataset-wide country lookup
+ * @param {Object} row - Data row the name is shown on
+ * @param {string} name - Name as displayed
+ * @returns {string[]}
+ */
+export function getCountriesForName(index, row, name) {
+	const trimmed = String(name ?? '').trim();
+	if (!trimmed) return [];
+
+	return lookupCountries(index, row, trimmed);
+}
+
+/**
+ * Flags for a name shown on a card. A place with no flag of its own — the
+ * tracker's "Region: …" labels — still filters and searches, it just has
+ * nothing to render here.
+ * @param {CountryIndex} index - Dataset-wide country lookup
+ * @param {Object} row - Data row the name is shown on
+ * @param {string} name - Name as displayed
+ * @returns {Array<{country: string, flag: string}>}
+ */
+export function getFlagsForName(index, row, name) {
+	const flags = index?.flags || getCountryFlagMap(row);
+
+	return getCountriesForName(index, row, name)
+		.map(country => ({ country, flag: getCountryFlag(country, flags) }))
+		.filter(entry => entry.flag);
+}
+
+/**
+ * Every place a row is tied to: the interaction's own location plus the places
+ * of every org and publication named on it. Places with no flag count the same
+ * as the rest, so a region the tracker names is filterable even though no card
+ * shows a flag for it.
+ * @param {Object} row - Data row
+ * @param {CountryIndex} [index] - Dataset-wide country lookup
+ * @returns {string[]} Unique location names
+ */
+export function getRowLocations(row, index) {
+	const locations = new Set();
+
+	for (const value of parseArray(row?.location)) {
+		const trimmed = String(value).trim();
+		if (trimmed) locations.add(trimmed);
+	}
+
+	const names = [
+		...parseArray(row?.organization_publisher_named_in_deal_suit),
+		...Object.keys(asPlainObject(row?.publication_countries))
+	];
+	for (const name of names) {
+		for (const country of getCountriesForName(index, row, name)) {
+			locations.add(country);
+		}
+	}
+
+	return Array.from(locations);
+}
+

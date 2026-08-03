@@ -2,14 +2,15 @@
 	import SearchBar from './SearchBar.svelte';
 	import MultiSelect from './MultiSelect.svelte';
 	import HierarchicalFilter from './HierarchicalFilter.svelte';
-	import { getColumnKey, parseArray } from './utils.js';
+	import { getColumnKey, parseArray, buildCountryIndex, getRowLocations } from './utils.js';
 
-	let { 
+	let {
 		data = [],
 		filterType = [],
 		filterInteraction = [],
 		filterPlatform = [],
 		filterPublishers = [],
+		filterLocation = [],
 		searchQuery = '',
 		filteredRowCount = 0,
 		onDownloadCSV = () => {},
@@ -89,6 +90,10 @@
 		onFilterChange('filterPublishers', selectedValues);
 	}
 
+	function handleLocationChange(selectedValues) {
+		onFilterChange('filterLocation', selectedValues);
+	}
+
 	function handleSearchChange(query) {
 		onFilterChange('searchQuery', query);
 	}
@@ -99,6 +104,16 @@
 
 	const aiCompanyOptions = $derived(getUniqueValues('AI Company'));
 	const newsOrgOptions = $derived(getUniqueValues('News Org'));
+
+	const countryIndex = $derived(buildCountryIndex(data));
+
+	const locationOptions = $derived.by(() => {
+		const unique = new Set();
+		data.forEach(row => {
+			getRowLocations(row, countryIndex).forEach(location => unique.add(location));
+		});
+		return Array.from(unique).sort();
+	});
 </script>
 
 <div class="filter-bar">
@@ -119,7 +134,7 @@
 			onSelectionChange={handlePlatformChange}
 		/>
 
-		<MultiSelect 
+		<MultiSelect
 			label="News Org"
 			options={newsOrgOptions}
 			selectedValues={filterPublishers}
@@ -128,7 +143,16 @@
 	</div>
 
 	<div class="filter-row-2">
-		<SearchBar 
+		<div class="location-filter">
+			<MultiSelect
+				label="Location"
+				options={locationOptions}
+				selectedValues={filterLocation}
+				onSelectionChange={handleLocationChange}
+			/>
+		</div>
+
+		<SearchBar
 			searchQuery={searchQuery}
 			onSearchChange={handleSearchChange}
 		/>
@@ -171,13 +195,25 @@
 		min-height: 44px;
 	}
 
+	@media screen and (max-width: 900px) {
+		.filter-row-1 {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+
 	.filter-row-2 {
 		display: flex;
 		gap: 1rem;
 		align-items: flex-end;
 	}
 
-	.filter-row-2 > *:first-child {
+	.filter-row-2 > .location-filter {
+		flex: 0 1 200px;
+		min-width: 140px;
+	}
+
+	/* The search bar, which takes whatever the location filter and button leave */
+	.filter-row-2 > *:nth-child(2) {
 		flex: 1;
 		min-width: 300px;
 	}
@@ -202,7 +238,13 @@
 			gap: 0.75rem;
 		}
 
-		.filter-row-2 > *:first-child {
+		/* Stacked, so the flex basis would set a height rather than a width */
+		.filter-row-2 > .location-filter {
+			flex: 0 0 auto;
+			min-width: unset;
+		}
+
+		.filter-row-2 > *:nth-child(2) {
 			min-width: unset;
 		}
 
@@ -230,12 +272,15 @@
 		padding: 0.6rem 1.5rem;
 		background-color: #254c6f;
 		color: white;
-		border: none;
+		/* Same padding, font and border width as the selects and the search box,
+		   so the row of controls comes out one height */
+		border: 1px solid transparent;
 		border-radius: 0;
 		cursor: pointer;
 		font-size: 0.95rem;
 		font-family: inherit;
 		font-weight: 500;
+		line-height: 1.2;
 	}
 
 	.download-csv-btn:hover {

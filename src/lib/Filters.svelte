@@ -8,6 +8,7 @@
 		filterType = $bindable([]),
 		filterPlatform = $bindable([]),
 		filterPublishers = $bindable([]),
+		filterLocation = $bindable([]),
 		filteredRowCount = 0,
 		onDownloadCSV = () => {}
 	} = $props();
@@ -18,6 +19,7 @@
 			filterType = [];
 			filterPlatform = [];
 			filterPublishers = [];
+			filterLocation = [];
 			searchQuery = '';
 		} else if (filterName === 'filterInteraction') {
 			filterInteraction = value;
@@ -27,18 +29,21 @@
 			filterPlatform = value;
 		} else if (filterName === 'filterPublishers') {
 			filterPublishers = value;
+		} else if (filterName === 'filterLocation') {
+			filterLocation = value;
 		} else if (filterName === 'searchQuery') {
 			searchQuery = value;
 		}
 	}
 </script>
 
-<FilterBar 
+<FilterBar
 	{data}
 	{filterInteraction}
 	{filterType}
 	{filterPlatform}
 	{filterPublishers}
+	{filterLocation}
 	{searchQuery}
 	{filteredRowCount}
 	onDownloadCSV={onDownloadCSV}

@@ -83,6 +83,7 @@
 		border: 1px solid #ccc;
 		border-radius: 0;
 		font-family: inherit;
+		line-height: 1.2;
 		color: #1a1a1a;
 	}
 

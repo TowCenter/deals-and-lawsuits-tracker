@@ -302,6 +302,7 @@
 		align-items: center;
 		font-size: 0.95rem;
 		font-family: inherit;
+		line-height: 1.2;
 		appearance: none;
 		-webkit-appearance: none;
 		-moz-appearance: none;

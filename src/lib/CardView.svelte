@@ -1,5 +1,5 @@
 <script>
-	import { parseArray, formatDate } from './utils.js';
+	import { parseArray, formatDate, buildCountryIndex, getFlagsForName, getRowLocations } from './utils.js';
 
 	/**
 	 * @typedef {Object} Props
@@ -9,17 +9,19 @@
 	 * @property {string[]} [filterType=[]] - Filter by types
 	 * @property {string[]} [filterPlatform=[]] - Filter by platforms
 	 * @property {string[]} [filterPublishers=[]] - Filter by publishers
+	 * @property {string[]} [filterLocation=[]] - Filter by locations
 	 * @property {(data: Array<Object>) => void} [onFilteredDataChange=() => {}] - Callback when filtered data changes
 	 */
 
 	/** @type {Props} */
-	let { 
+	let {
 		data = [],
 		searchQuery = '',
 		filterInteraction = [],
 		filterType = [],
 		filterPlatform = [],
 		filterPublishers = [],
+		filterLocation = [],
 		onFilteredDataChange = () => {}
 	} = $props();
 
@@ -65,6 +67,11 @@
 	function isSourceCard(row) {
 		return viewingRelatedTo != null && row.id === viewingRelatedTo;
 	}
+
+	// Country lookup for the flags shown beside org and publication names. Built
+	// once over the whole dataset so a name missing a country on its own row can
+	// still borrow the one it carries elsewhere.
+	const countryIndex = $derived(buildCountryIndex(data));
 
 	// Create ID-to-row lookup map for efficient related card access
 	const idToRowMap = $derived.by(() => {
@@ -449,7 +456,7 @@
 		
 		// Early return if no filters
 		if (!filterInteraction?.length && !filterType?.length && !filterPlatform?.length &&
-		    !filterPublishers?.length && !searchQuery?.trim()) {
+		    !filterPublishers?.length && !filterLocation?.length && !searchQuery?.trim()) {
 			// Still need to sort
 			const sorted = [...dataToFilter];
 			sorted.sort((a, b) => {
@@ -486,6 +493,12 @@
 				if (!matchesFilter(allPublishers, filterPublishers)) continue;
 			}
 
+			// Filter by location (the interaction's own location plus the countries of
+			// the orgs and publications it names)
+			if (filterLocation?.length > 0) {
+				if (!matchesFilter(getRowLocations(row, countryIndex), filterLocation)) continue;
+			}
+
 			// Search query filter
 			if (!matchesSearch(row, searchQuery)) continue;
 
@@ -515,7 +528,8 @@
 		const hasActiveFilters = 
 			(searchQuery?.trim().length > 0) ||
 			(filterType?.length > 0) ||
-			(filterPublishers?.length > 0);
+			(filterPublishers?.length > 0) ||
+			(filterLocation?.length > 0);
 
 		// Expand every matching card while filtering, collapse everything otherwise
 		expandedCards = hasActiveFilters ? new Set(filteredData.map(row => row.id)) : new Set();
@@ -1039,6 +1053,16 @@
 	}
 </script>
 
+<!-- Country flags for a name on a card; a name in several countries gets several.
+     Hovering one names the country it stands for -->
+{#snippet countryFlags(flagRow, flagName)}
+	{#each getFlagsForName(countryIndex, flagRow, flagName) as { country, flag }}
+		<span class="publication-flag" role="img" aria-label={country} data-place={country}>
+			{flag}
+		</span>
+	{/each}
+{/snippet}
+
 <div
 	class="card-view"
 	class:related-active={viewingRelatedTo != null}
@@ -1196,7 +1220,10 @@
 								{@const orgTree = hierarchyTree[org] || {}}
 								{@const hasMatches = Object.keys(orgTree).length > 0 || (orgTree.publications && orgTree.publications.length > 0)}
 								<div class="publisher-item">
-									<div class="field-item">{@html highlightText(org)}</div>
+									<div class="field-item">
+										{@html highlightText(org)}
+										{@render countryFlags(entry, org)}
+									</div>
 									{#if hasMatches}
 										<div class="affected-publications">
 											{#snippet renderNode(node, parentName = null)}
@@ -1212,6 +1239,7 @@
 																		<span class="hierarchy-label">Grantee: </span>
 																	{/if}
 																	{@html highlightText(publication)}
+																	{@render countryFlags(entry, publication)}
 																</div>
 							{/if}
 							{/each}
@@ -1222,6 +1250,7 @@
 																	<span class="hierarchy-label">Grant Administrator: </span>
 																{/if}
 																{@html highlightText(key)}
+																{@render countryFlags(entry, key)}
 															</span>
 															<div class="hierarchy-intermediate-children">
 																{@render renderNode(child, key)}
@@ -2261,6 +2290,42 @@
 		padding-left: 0.75rem;
 		margin: 0;
 	}
+
+	/* Country flag for a publication; a publication in several countries gets several */
+	.publication-flag {
+		font-style: normal;
+		margin-left: 0.25rem;
+		cursor: help;
+		position: relative;
+		display: inline-block;
+	}
+
+	/* Names the country on hover. The card clips at its edges, so this sits above
+	   the flag, where a name always has card left over it */
+	.publication-flag::after {
+		content: attr(data-place);
+		position: absolute;
+		bottom: calc(100% + 0.25rem);
+		left: 0;
+		z-index: 5;
+		padding: 0.25rem 0.5rem;
+		background-color: #1a1a1a;
+		color: #fff;
+		font-size: 0.7rem;
+		font-weight: 400;
+		letter-spacing: 0.3px;
+		white-space: nowrap;
+		opacity: 0;
+		visibility: hidden;
+		transition: opacity 0.15s ease;
+		pointer-events: none;
+	}
+
+	.publication-flag:hover::after {
+		opacity: 1;
+		visibility: visible;
+	}
+
 
 	.card-field.reported-details .field-value {
 		line-height: 1.6;

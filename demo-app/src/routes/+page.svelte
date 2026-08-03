@@ -84,6 +84,11 @@
         return [value].filter(v => isValidValue(v));
     }
 
+    // Helper function to normalize map fields (publication -> countries, country -> flag)
+    function normalizeObject(value) {
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    }
+
     // Parse JSON format and normalize field names for data2.json
     function normalizeData(rawDataArray) {
         if (!Array.isArray(rawDataArray)) {
@@ -138,6 +143,10 @@
                     plaintiff: normalizeArray(row?.Plaintiff),
                     case_filing: isValidValue(row?.['Case Filing']) ? String(row['Case Filing']) : null,
                     location: isValidValue(row?.Location) ? String(row.Location) : null,
+                    // Publication -> countries, and country -> flag emoji, for the
+                    // flags shown beside publications and the Location filter
+                    publication_countries: normalizeObject(row?.['Publication Countries']),
+                    country_flags: normalizeObject(row?.['Country Flags']),
                 };
             } catch (error) {
                 console.error(`Error processing row ${index}:`, error, row);
@@ -155,6 +164,7 @@
     let filterType = $state([]);
     let filterPlatform = $state([]);
     let filterPublishers = $state([]);
+    let filterLocation = $state([]);
     let filteredData = $state([]);
 
     // Sync filter state with URL query params so views are shareable.
@@ -167,6 +177,7 @@
         filterType = params.getAll('type');
         filterPlatform = params.getAll('platform');
         filterPublishers = params.getAll('publishers');
+        filterLocation = params.getAll('location');
         urlSyncReady = true;
     });
 
@@ -178,6 +189,7 @@
         for (const v of filterType) params.append('type', v);
         for (const v of filterPlatform) params.append('platform', v);
         for (const v of filterPublishers) params.append('publishers', v);
+        for (const v of filterLocation) params.append('location', v);
         const qs = params.toString();
         const newUrl = `${window.location.pathname}${qs ? '?' + qs : ''}${window.location.hash}`;
         window.history.replaceState(null, '', newUrl);
@@ -364,6 +376,7 @@ The tracker is updated at the beginning of each month. Please contact <a href='m
             bind:filterType
             bind:filterPlatform
             bind:filterPublishers
+            bind:filterLocation
             filteredRowCount={filteredData.length}
             onDownloadCSV={downloadToCSV}
         />
@@ -376,6 +389,7 @@ The tracker is updated at the beginning of each month. Please contact <a href='m
             {filterType}
             {filterPlatform}
             {filterPublishers}
+            {filterLocation}
             onFilteredDataChange={(data) => { filteredData = data; }}
         />
     {/if}
