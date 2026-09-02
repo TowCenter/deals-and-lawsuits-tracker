@@ -12,9 +12,13 @@
 		<meta property="og:type" content="website" />
 		<meta property="og:title" content="AI Deals and Lawsuits | Platforms and Publishers" />
 		<meta property="og:description" content="A tracker monitoring developments between news publishers and AI companies—including lawsuits, deals, and grants—based on publicly available information." />
-		<meta property="og:image" content="https://www.cjr.org/wp-content/uploads/2017/08/tow-design-hero-3.jpg" />
+		<!-- Card art lives at static/social-card.png; the URL has to be absolute for
+		     crawlers, so it points at production regardless of which target built it. -->
+		<meta property="og:image" content="https://tow.cjr.org/ai-deals-lawsuits/social-card.png" />
+		<meta property="og:image:type" content="image/png" />
 		<meta property="og:image:width" content="1200" />
 		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="AI Deals and Disputes Tracker — a Tow Center tracker of lawsuits, deals, and grants between news publishers and AI companies." />
 		<meta property="og:site_name" content="Tow Center for Digital Journalism" />
 		
 		<!-- Twitter -->
@@ -23,7 +27,8 @@
 		<meta property="twitter:url" content="https://tow.cjr.org/ai-deals-lawsuits/" />
 		<meta name="twitter:title" content="AI Deals and Lawsuits | Platforms and Publishers" />
 		<meta name="twitter:description" content="A tracker monitoring developments between news publishers and AI companies—including lawsuits, deals, and grants—based on publicly available information." />
-		<meta name="twitter:image" content="https://www.cjr.org/wp-content/uploads/2017/08/tow-design-hero-3.jpg" />
+		<meta name="twitter:image" content="https://tow.cjr.org/ai-deals-lawsuits/social-card.png" />
+		<meta name="twitter:image:alt" content="AI Deals and Disputes Tracker — a Tow Center tracker of lawsuits, deals, and grants between news publishers and AI companies." />
 		
 		%sveltekit.head%
 		<script defer src="https://cloud.umami.is/script.js" data-website-id="dfb93e71-a14a-439f-a803-b01786c4cd0b"></script>

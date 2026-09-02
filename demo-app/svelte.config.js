@@ -15,10 +15,13 @@ const config = {
 		// preview. Asset URLs are absolute, so the base path has to be set per target
 		// at build time — see the build scripts in package.json.
 		paths: {
-			base: process.env.BASE_PATH ?? ''
+			base: process.env.BASE_PATH ?? '',
+			// Prerendered pages default to relative asset URLs, which resolve against
+			// the page's own directory instead of the site root and leave a subpage
+			// with no JS or CSS. Pin them to the base path instead.
+			relative: false
 		}
 	}
 };
 
 export default config;
-

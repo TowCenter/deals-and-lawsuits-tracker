@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build && node fix-methodology.js",
+		"build": "vite build",
 		"build:prod": "BASE_PATH=/ai-deals-lawsuits npm run build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",

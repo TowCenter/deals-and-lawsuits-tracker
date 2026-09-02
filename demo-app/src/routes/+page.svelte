@@ -313,13 +313,6 @@
     const showLoading = $derived(isLoading);
     
     import { base } from '$app/paths';
-    import { dev } from '$app/environment';
-
-    // The build emits the prerendered methodology page as a flat methodology.html.
-    // GitHub Pages resolves the extensionless /methodology to it, but the server
-    // behind tow.cjr.org does not, so link production at the file directly. The dev
-    // server has no such file and only matches routes, hence the split.
-    const methodologyHref = dev ? `${base}/methodology` : `${base}/methodology.html`;
 
     // Navigation items for the left sidebar
     const navItems = [
@@ -359,8 +352,8 @@
             text={`This tracker monitors developments between news publishers and AI companies—including <span class='interaction-tag-inline lawsuit'>Lawsuits</span>, <span class='interaction-tag-inline deal'>Deals</span>, and <span class='interaction-tag-inline grant'>Grants</span>—based on publicly available information.
 
 <br><br>It is compiled by Tow Center as part of the <a href='https://towcenter.columbia.edu/news/platforms-and-publishers'>Platforms and Publishers project</a>.
-The tracker is updated at the beginning of each month. Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> with any feedback or suggestions about developments we may have missed.
-<br><br>Read our <a href='${methodologyHref}'>methodology</a> to learn more about how we collect and categorize this data.`}
+Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> with any feedback or suggestions about developments we may have missed.
+<br><br>Read our <a href='${base}/methodology/'>methodology</a> to learn more about how we collect and categorize this data.`}
         />
         <div class="update-date-divider">
             <div class="divider-line"></div>
