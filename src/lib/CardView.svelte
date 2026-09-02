@@ -790,9 +790,32 @@
 	// Memoized version
 	const getArchiveInfo = memoizePrimitive(getArchiveInfoImpl, archiveInfoCache, 500);
 
+	// Citations are labelled with their hostname, which reads correctly for a
+	// publisher (storage.courtlistener.com, nytco-assets.nytimes.com) but not for a
+	// document the tracker hosts itself — that prints the S3 bucket name at a reader.
+	// Those get an explicit title here, keyed on the URL's decoded path so the query
+	// string and the scheme don't matter. A self-hosted file that isn't listed still
+	// falls back to its hostname: visibly wrong rather than silently mislabelled.
+	// Rename an object in the bucket and its key below has to change with it.
+	const SELF_HOSTED_SOURCE_LABELS = {
+		"/La Presse Inc. c. OpenAI Group PBC et al - Demande introductive d'instance (24 novembre 2025).pdf":
+			'Court filing (PDF)'
+	};
+
+	function getSelfHostedSourceLabel(url) {
+		try {
+			return SELF_HOSTED_SOURCE_LABELS[decodeURIComponent(new URL(url).pathname)] ?? null;
+		} catch (e) {
+			return null;
+		}
+	}
+
 	// Get display text for a source URL
 	function getSourceDisplayTextImpl(url) {
 		const archiveInfo = getArchiveInfo(url);
+		// An archived copy is the same document, so it takes the same label.
+		const selfHostedLabel = getSelfHostedSourceLabel(archiveInfo.isArchive ? archiveInfo.originalUrl : url);
+		if (selfHostedLabel) return selfHostedLabel;
 		if (archiveInfo.isArchive) {
 			// For archives, show the hostname of the original URL
 			try {
