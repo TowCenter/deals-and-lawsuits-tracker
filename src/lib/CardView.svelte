@@ -1,8 +1,15 @@
 <script>
+	import { isMdlConsolidation } from './mdl.js';
+	import { buildOwnershipGraph, publisherNames, normalizeName } from './publisherNetwork.js';
+	import PublisherNetwork from './PublisherNetwork.svelte';
+	import CardView from './CardView.svelte';
+	let networkRow = $state(null);
 	import { parseArray, formatDate, buildCountryIndex, getPlacesForName, getRowLocations } from './utils.js';
 
 	/**
 	 * @typedef {Object} Props
+	 * @property {Array<number|string>|null} [focusedRecordIds=null] - Records to display collapsed in the network panel
+	 * @property {number|string|null} [focusedRecordId=null] - Record to display in the detail dialog
 	 * @property {Array<Object>} [data=[]] - Card data rows
 	 * @property {string} [searchQuery=''] - Search query string
 	 * @property {string[]} [filterInteraction=[]] - Filter by interactions
@@ -18,6 +25,8 @@
 	/** @type {Props} */
 	let {
 		data = [],
+		focusedRecordId = null,
+		focusedRecordIds = null,
 		searchQuery = '',
 		filterInteraction = [],
 		filterType = [],
@@ -52,6 +61,7 @@
 	}
 
 	let expandedCards = $state(new Set());
+	$effect(() => { if (focusedRecordId != null) expandedCards = new Set([focusedRecordId]); });
 	
 	// True for a card shown because another card links to it, not the card being viewed
 	function isRelatedCardInFilteredView(row) {
@@ -116,6 +126,36 @@
 	 * kept; a single-entry case renders exactly as it always has.
 	 * @returns {Map<string, Object[]>} lawsuit_id -> entries sorted oldest first
 	 */
+ const networkAvailability = $derived.by(() => {
+  const graph = buildOwnershipGraph(data), componentByKey = new Map(), recordsByComponent = new Map();
+  let component = 0;
+  for (const key of graph.keys()) {
+   if (componentByKey.has(key)) continue;
+   const pending = [key];
+   componentByKey.set(key, component);
+   while (pending.length) {
+    for (const neighbor of graph.get(pending.pop())?.neighbors || []) if (!componentByKey.has(neighbor)) { componentByKey.set(neighbor,component); pending.push(neighbor); }
+   }
+   component++;
+  }
+  for (const record of data) {
+   if (isMdlConsolidation(record)) continue;
+   for (const group of new Set(publisherNames(record).map(name => componentByKey.get(normalizeName(name))).filter(value => value != null))) {
+    if (!recordsByComponent.has(group)) recordsByComponent.set(group, []);
+    recordsByComponent.get(group).push(record);
+   }
+  }
+  const availability = new Map();
+  for (const record of data) {
+   const ids = new Set(record.lawsuit_ids || (record.lawsuit_id ? [record.lawsuit_id] : []));
+   const candidates = publisherNames(record).flatMap(name => recordsByComponent.get(componentByKey.get(normalizeName(name))) || []);
+   availability.set(record.id, candidates.some(other => other.id !== record.id &&
+    !(record.lawsuit_id && other.lawsuit_id === record.lawsuit_id) &&
+    !(other.lawsuit_ids || []).some(id => ids.has(id))));
+  }
+  return availability;
+ });
+
 	const caseGroups = $derived.by(() => {
 		const groups = new Map();
 		for (const row of data) {
@@ -156,10 +196,29 @@
 	 * shows on every card of the case, each marking its own step, so a reader who
 	 * lands on any single entry can see where it sits in the case.
 	 * @param {Object} row - Data row
-	 * @returns {Object[]} All entries of the case, or [] if it has only one
+	 * @returns {Object[]} Status changes in chronological order, preserving the first date of each change
 	 */
 	function getStatusProgression(row) {
-		return getCaseEntries(row) || [];
+		const changes = [];
+        // Lawsuit IDs identify cases; MDL IDs identify their shared proceeding.
+        const individualIds = (item) => (item.lawsuit_ids || [item.lawsuit_id]).filter(Boolean);
+        const ids = new Set(individualIds(row));
+        const history = data.filter(item => individualIds(item).some(id => ids.has(id)))
+            .sort((a, b) => parseDate(a.date || '').getTime() - parseDate(b.date || '').getTime());
+        for (const entry of history) {
+            const rawStatus = String(entry.status || '').trim();
+            const status = /^initiated\s*\/\s*in progress$/i.test(rawStatus) ? 'Initiated'
+                : rawStatus;
+            if (!status) continue;
+            const key = status.toLowerCase().replace(/\s+/g, ' ');
+            const previous = changes[changes.length - 1];
+            if (previous?.statusKey === key) {
+                previous.entryIds.push(entry.id);
+            } else {
+                changes.push({ ...entry, status, statusKey: key, entryIds: [entry.id] });
+            }
+        }
+        return changes;
 	}
 
 	// Reveals an earlier or later entry of the same case: expands it and brings it
@@ -424,6 +483,7 @@
 					row.reported_details,
 			row.status,
 			row.case_number,
+            row.mdl_number, row.mdl_name, row.mdl_court, row.mdl_docket,
 			row.defendant,
 			row.plaintiff,
 			row.location,
@@ -460,8 +520,10 @@
 	 * @returns {Object[]} Filtered and sorted data
 	 */
 	function getFilteredAndSorted() {
+		if (focusedRecordIds != null) return data.filter(row => !isMdlConsolidation(row) && focusedRecordIds.includes(row.id));
+		if (focusedRecordId != null) return data.filter(row => !isMdlConsolidation(row) && row.id === focusedRecordId);
 		// If viewing related cards, filter to show the source + its related cards.
-		let dataToFilter = data;
+		let dataToFilter = data.filter(row => !isMdlConsolidation(row));
 		if (viewingRelatedTo != null) {
 			const sourceRow = idToRowMap.get(viewingRelatedTo);
 			if (sourceRow && sourceRow.linked_entry_ids && Array.isArray(sourceRow.linked_entry_ids)) {
@@ -474,7 +536,7 @@
 						relatedRows.push(relatedRow);
 					}
 				}
-				dataToFilter = relatedRows;
+				dataToFilter = relatedRows.filter(row => !isMdlConsolidation(row));
 			} else {
 				dataToFilter = [];
 			}
@@ -605,7 +667,7 @@
 			(filterLocation?.length > 0);
 
 		// Expand every matching card while filtering, collapse everything otherwise
-		expandedCards = hasActiveFilters ? new Set(filteredData.map(row => row.id)) : new Set();
+		expandedCards = focusedRecordId != null ? new Set([focusedRecordId]) : hasActiveFilters ? new Set(filteredData.map(row => row.id)) : new Set();
 	});
 
 	/**
@@ -1149,6 +1211,17 @@
 	}
 </script>
 
+{#if networkRow}
+ <PublisherNetwork row={networkRow} {data} onclose={() => networkRow = null}>
+  {#snippet recordCard(selectedEntries, expandRecord)}
+   {#key selectedEntries.map(entry => entry.id).join(',') + expandRecord}
+    <CardView {data} focusedRecordId={expandRecord ? selectedEntries[0]?.id : null} focusedRecordIds={expandRecord ? null : selectedEntries.map(entry => entry.id)} {showCountries} />
+   {/key}
+  {/snippet}
+ </PublisherNetwork>
+{/if}
+
+
 <!-- Country flags for a name on a card; a name in several countries gets several.
      Hovering one names the country it stands for. While filtering, only the
      filtered country is drawn, so a card shows what put it in the results —
@@ -1198,9 +1271,10 @@
 						{@const entry = row}
 						{@const allPublishers = Array.isArray(entry.organization_publisher_named_in_deal_suit) ? entry.organization_publisher_named_in_deal_suit : []}
 							{@const allSources = normalizeSources(entry.sources)}
+                            {@const hasCaseNumber = interactionType === 'lawsuit' && entry.case_number && !['unknown', '(unknown)', '—', 'nan'].includes(String(entry.case_number).trim().toLowerCase())}
+
 						{@const parentChildMatches = Array.isArray(entry.parent_child_matches) ? entry.parent_child_matches : []}
 						{@const hierarchyTree = buildHierarchyTree(parentChildMatches, allPublishers)}
-						{@const linkedEntries = getLinkedEntries(row)}
 						{@const borderColors = interactionTypes.map(t => {
 							if (t === 'lawsuit') return '#e57373';
 							if (t === 'grant') return '#64b5f6';
@@ -1396,10 +1470,12 @@
 															<!-- Same chronology on every card of the case; this card marks its own step -->
 															<ol class="status-chain">
 																{#each progression as step (step.id)}
-																	{@const isCurrentStep = step.id === row.id}
+																	{@const isCurrentStep = step.entryIds.includes(row.id)}
 																	<li class="status-chain-step {getStatusClass(step.status)}" class:current={isCurrentStep}>
 																		<span class="status-chain-dot"></span>
-																		{#if isCurrentStep}
+																		{#if isMdlConsolidation(step) && (step.mdl_docket_url || row.mdl_docket_url || step.docket)}
+                                                                    <a href={step.mdl_docket_url || row.mdl_docket_url || step.docket} target="_blank" rel="noopener noreferrer" class="status-chain-label status-chain-jump" onclick={(event) => event.stopPropagation()}>{@html highlightText(step.status)}</a>
+                                                                {:else if isCurrentStep}
 																			<span class="status-chain-label">{@html highlightText(step.status || 'Filed')}</span>
 																		{:else}
 																			<button
@@ -1442,24 +1518,45 @@
 										</div>
 									</div>
 
-										{#if interactionType === 'lawsuit' && entry.case_number && entry.case_number}
-											{@const caseNumber = String(entry.case_number).trim()}
-											{@const isUnknown = caseNumber.toLowerCase() === '(unknown)' || caseNumber.toLowerCase() === 'unknown' || caseNumber === '—' || caseNumber === 'nan'}
-											{#if !isUnknown}
-												<div class="card-field case-details-field">
-													<div class="field-label">Case Details:</div>
-													<div class="field-value">
-														{#if entry.case_filing && entry.case_filing}
-															<a href={entry.case_filing} target="_blank" rel="noopener noreferrer" class="source-link">
-																{@html highlightText(caseNumber)}
-															</a>
-														{:else}
-															{@html highlightText(caseNumber)}
-							{/if}
-						</div>
-					</div>
-											{/if}
-										{/if}
+                            {#if hasCaseNumber || entry.mdl_number}
+                                <div class="card-field case-details-field">
+                                    <div class="field-label">Docket(s)</div>
+                                    <div class="field-value">
+                                        {#if hasCaseNumber}
+                                            <div>Case:
+                                                {#if entry.docket}
+                                                    <a href={entry.docket} target="_blank" rel="noopener noreferrer" class="source-link">{@html highlightText(String(entry.case_number).trim())}</a>
+                                                {:else}
+                                                    {@html highlightText(String(entry.case_number).trim())}
+                                                {/if}
+                                            </div>
+                                        {/if}
+                                        {#if entry.mdl_number}
+                                            <div>MDL:
+                                                {#if entry.mdl_docket_url}
+                                                    <a href={entry.mdl_docket_url} target="_blank" rel="noopener noreferrer" class="source-link">{entry.mdl_docket}</a>
+                                                {:else}
+                                                    <span>{entry.mdl_docket}</span>
+                                                {/if}
+                                            </div>
+                                        {/if}
+                                    </div>
+                                </div>
+                            {/if}
+
+                            {#each [{ label: 'Case Filing', value: entry.case_filing }, { label: 'Additional Coverage', value: entry.additional_coverage }] as linkField}
+                                {@const urls = normalizeSources(linkField.value)}
+                                {#if urls.length > 0}
+                                    <div class="card-field">
+                                        <div class="field-label">{linkField.label}:</div>
+                                        <div class="field-value">
+                                            {#each urls as url}
+                                                <div><a href={url} target="_blank" rel="noopener noreferrer" class="source-link">{getSourceDisplayText(url)}</a></div>
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/if}
+                            {/each}
 
 							{#if allSources.length > 0}
 								<div class="citations-section">
@@ -1475,35 +1572,14 @@
 					</div>
 				{/if}
 								
-								<!-- Linked Entries Link -->
-								{#if linkedEntries.length > 0}
-									{@const isInRelatedView = viewingRelatedTo != null && (viewingRelatedTo === row.id || isRelatedCardInFilteredView(row))}
-									<div class="related-cards-toggle">
-										{#if isInRelatedView}
-											<button 
-												class="related-toggle-btn see-all-btn"
-												onclick={(e) => { e.stopPropagation(); viewAllCards(); }}
-												onkeydown={(e) => e.key === 'Enter' && viewAllCards()}
-												tabindex="0"
-											>
-												<span class="related-toggle-icon">←</span>
-												<span class="related-toggle-text">See all</span>
-											</button>
-										{:else}
-											<button 
-												class="related-toggle-btn"
-												onclick={(e) => { e.stopPropagation(); viewRelatedCards(row.id); }}
-												onkeydown={(e) => e.key === 'Enter' && viewRelatedCards(row.id)}
-												tabindex="0"
-											>
-												<span class="related-toggle-icon">→</span>
-												<span class="related-toggle-text">
-													Linked Entries ({linkedEntries.length})
-												</span>
-											</button>
-										{/if}
-									</div>
-								{/if}
+                                {#if networkAvailability.get(row.id)}
+                                    <div class="related-cards-toggle">
+                                        <button class="related-toggle-btn publisher-network-btn" onclick={(event) => { event.stopPropagation(); networkRow = row; }}>
+                                            <img class="network-icon" src="/publisher-network-icon.png" alt="" aria-hidden="true" />
+                                            <span class="network-button-copy"><strong>Related Relationships</strong></span>
+                                        </button>
+                                    </div>
+                                {/if}
 						</div>
 					</div>
 				{/if}
@@ -2726,38 +2802,18 @@
 		color: #1a3a52;
 	}
 
-	.related-toggle-btn.see-all-btn {
-		color: #666;
-	}
+ .related-toggle-btn.publisher-network-btn {
+  background:#fffbea;
+  border:1px solid #d8c779;
+  padding:0.85rem 1rem;
+  gap:0.85rem;
+ }
+ .related-toggle-btn.publisher-network-btn:hover { background:#fff5d4; border-color:#c7b565; }
+ .publisher-network-btn:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
+ .network-icon { width:32px; height:32px; object-fit:contain; flex-shrink:0; }
+ .network-button-copy { display:flex; flex-direction:column; gap:0.25rem; }
+ .network-button-copy strong { font-size:0.9rem; line-height:1.35; font-weight:600; }
 
-	.related-toggle-btn.see-all-btn:hover {
-		background-color: #f5f5f5;
-		color: #333;
-	}
-
-	.related-toggle-icon {
-		font-size: 1rem;
-		font-weight: 600;
-		color: #254c6f;
-		transition: transform 0.2s ease;
-	}
-
-	.related-toggle-btn:hover .related-toggle-icon {
-		transform: translateX(2px);
-	}
-
-	.related-toggle-btn.see-all-btn .related-toggle-icon {
-		transform: translateX(-2px);
-	}
-
-	.related-toggle-btn.see-all-btn:hover .related-toggle-icon {
-		transform: translateX(-4px);
-	}
-
-	.related-toggle-text {
-		font-weight: 500;
-		flex: 1;
-	}
 
 	@media screen and (max-width: 768px) {
 

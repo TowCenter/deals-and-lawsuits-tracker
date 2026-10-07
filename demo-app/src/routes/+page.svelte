@@ -1,5 +1,6 @@
 <script>
     import { onMount } from 'svelte';
+    import { buildMdlMembership } from '../../../src/lib/mdl.js';
     import Head from "../../../src/lib/Head.svelte";
     import Article from "../../../src/lib/Article.svelte";
     import Header from "../../../src/lib/Header.svelte";
@@ -96,6 +97,7 @@
             return [];
         }
         
+        const mdlForRow = buildMdlMembership(rawDataArray);
         return rawDataArray.map((row, index) => {
             try {
                 // Normalize linked_entry_ids - handle both array and null/undefined.
@@ -131,11 +133,15 @@
                     organization_publisher_named_in_deal_suit: normalizeArray(row?.['News Org(s)']),
                     affected_publications: normalizeArray(row?.['Affected Publications']),
                     parent_child_matches: Array.isArray(row?.['parent_child_matches']) ? row['parent_child_matches'] : [],
+                    docket: row?.Docket || null,
+                    additional_coverage: row?.['Additional Coverage'] || null,
                     sources: normalizeArray(row?.Sources),
                     linked_entry_ids: linkedEntryIds,
+                    ...mdlForRow(row),
                     // Lawsuit-specific fields
                     // Rows sharing a lawsuit_id are the SAME case at different points in time,
                     // not related cases. CardView merges them into one card with a status track.
+                    lawsuit_ids: normalizeArray(row?.Lawsuit_ID),
                     lawsuit_id: isValidValue(row?.Lawsuit_ID) ? String(row.Lawsuit_ID) : null,
                     status: isValidValue(row?.Status) ? String(row.Status) : null,
                     case_number: isValidValue(row?.['Case Number']) ? String(row['Case Number']) : null,
@@ -213,6 +219,9 @@
             { name: 'Status', key: 'status' },
             { name: 'Case Number', key: 'case_number' },
             { name: 'Case Filing', key: 'case_filing' },
+            { name: 'Docket', key: 'docket' },
+            { name: 'Additional Coverage', key: 'additional_coverage' },
+            ...['number', 'name', 'court', 'docket', 'docket_url', 'initiated_date', 'joined_date', 'source'].map(field => ({ name: `MDL ${field.replaceAll('_', ' ')}`, key: `mdl_${field}` })),
             { name: 'Location', key: 'location' },
         ];
         
