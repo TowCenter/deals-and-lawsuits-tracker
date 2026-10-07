@@ -1,4 +1,5 @@
 <script>
+	import { base } from '$app/paths';
 	import { isMdlConsolidation } from './mdl.js';
 	import { buildOwnershipGraph, publisherNames, normalizeName } from './publisherNetwork.js';
 	import PublisherNetwork from './PublisherNetwork.svelte';
@@ -1575,7 +1576,7 @@
                                 {#if networkAvailability.get(row.id)}
                                     <div class="related-cards-toggle">
                                         <button class="related-toggle-btn publisher-network-btn" onclick={(event) => { event.stopPropagation(); networkRow = row; }}>
-                                            <img class="network-icon" src="/publisher-network-icon.png" alt="" aria-hidden="true" />
+                                            <img class="network-icon" src={`${base}/publisher-network-icon.png`} alt="" aria-hidden="true" />
                                             <span class="network-button-copy"><strong>Related Relationships</strong></span>
                                         </button>
                                     </div>
