@@ -38,3 +38,17 @@ test('preview includes the current lawsuit and an inherited deal without duplica
  assert.deepEqual(preview.platforms, ['Microsoft', 'OpenAI']);
  assert.deepEqual(preview.edges.map(edge => [edge.platform, edge.kind]), [['Microsoft', 'lawsuit'], ['OpenAI', 'deal']]);
 });
+
+test('grant recipients combine grantees and affected publications without creating ownership', () => {
+ const [grant, deal] = normalizeData([
+  {Interaction:['Grant'], 'News Org(s)':['Lenfest'], Grantees:['Newsroom A'], 'Affected Publications':['Newsroom A', 'Newsroom B'], 'AI Company':['OpenAI']},
+  {Interaction:['Deal'], 'News Org(s)':['Owner'], 'Affected Publications':['Publication']}
+ ]);
+ assert.deepEqual(grant.organization_publisher_named_in_deal_suit, ['Lenfest', 'Newsroom A', 'Newsroom B']);
+ assert.deepEqual(grant.named_organizations, ['Lenfest']);
+ assert.deepEqual(grant.grantees, ['Newsroom A']);
+ assert.deepEqual(grant.parent_child_matches, []);
+ assert.deepEqual(deal.organization_publisher_named_in_deal_suit, ['Owner']);
+ const index = createPublisherRelationshipIndex([grant]);
+ assert(index.includes(grant, 'Newsroom B'));
+});

@@ -13,7 +13,7 @@
  let selectedPublisher = $state(untrack(() => entityName && !entityPlatform ? normalize(entityName) : null));
  const panelRecords = $derived(selectedKind
   ? entries.filter(entry => kind(entry) === selectedKind && connectionNodes(entry).length > 0)
-  : selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => publisherAndAncestors(ownership, selectedPublisher).has(node.key)))
+  : selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => selectedPublisherAncestors.has(node.key)))
   : selectedPlatform ? entries.filter(entry => entry.companies.includes(selectedPlatform))
   : selectedRecord ? [selectedRecord] : []);
 
@@ -168,9 +168,17 @@
   return inheritedConnection(connection) || activeConnection(connection.entry, connection.node, connection.company);
  }
  const highlighting = $derived(hoveredKind != null || selectedKind != null || selectedOrigin || selectedPublisher != null || selectedPlatform != null || selectedConnection != null || hoveredPublisher != null || hoveredPlatform != null || hoveredConnection != null);
+ const selectedPublisherAncestors = $derived(selectedPublisher ? publisherAndAncestors(ownership, selectedPublisher) : new Set());
+ const connectionNodeIndex = $derived.by(() => {
+  const index = new Map();
+  for (const entry of entries) {
+   const keys = new Set((entry.organization_publisher_named_in_deal_suit || []).map(normalize));
+   index.set(entry.id, [...keys].map(key => nodeByName.get(key)).filter(Boolean));
+  }
+  return index;
+ });
  function connectionNodes(entry) {
-  const direct = (entry.organization_publisher_named_in_deal_suit || []).map(normalize);
-  return [...new Set(direct)].map(key => nodeByName.get(key)).filter(Boolean);
+  return connectionNodeIndex.get(entry.id) || [];
  }
  const entries = $derived.by(() => {
   const groups = new Map();

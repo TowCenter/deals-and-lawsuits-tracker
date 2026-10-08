@@ -163,13 +163,6 @@ export function routeCircleConnection(source, target, circles, width, height, re
  const blocked=(x,y)=>obstacles.some(node=>Math.hypot(x-center(node).x,y-center(node).y)<node.r+padding);
  // Bound routing work independently of the database or zoomed canvas size.
  const step=retry ? Math.max(3,Math.sqrt(width*height/48000),Math.min(source.r/2,width/256,height/192)) : Math.max(6,width/192,height/128),cols=Math.ceil(width/step),rows=Math.ceil(height/step);
- const occupancy=new Uint8Array(cols*rows);
- for(const node of obstacles) {
-  const c=center(node),radius=node.r+padding;
-  const minX=Math.max(0,Math.floor((c.x-radius)/step)),maxX=Math.min(cols-1,Math.ceil((c.x+radius)/step));
-  const minY=Math.max(0,Math.floor((c.y-radius)/step)),maxY=Math.min(rows-1,Math.ceil((c.y+radius)/step));
-  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++)if(Math.hypot(x*step-c.x,y*step-c.y)<radius)occupancy[y*cols+x]=1;
- }
  const index=(x,y)=>y*cols+x;
  const start={x:Math.round(a.x/step),y:Math.round(a.y/step)},goal={x:Math.round(b.x/step),y:Math.round(b.y/step)};
  // Connections to the same platform converge at a shared, unobstructed
@@ -178,7 +171,29 @@ export function routeCircleConnection(source, target, circles, width, height, re
  const corridorClear=approach && Array.from({length:33},(_,i)=>{const t=i/32;return !blocked(approach.x+(b.x-approach.x)*t,approach.y+(b.y-approach.y)*t);}).every(Boolean);
  const gate = corridorClear
   ? {x:Math.round(approach.x/step),y:Math.round(approach.y/step)} : null;
+ const clearSegment=(p,q)=>{
+  const dx=q.x-p.x,dy=q.y-p.y,length2=dx*dx+dy*dy;
+  return !obstacles.some(node=>{
+   const c=center(node),t=length2?Math.max(0,Math.min(1,((c.x-p.x)*dx+(c.y-p.y)*dy)/length2)):0;
+   return Math.hypot(p.x+t*dx-c.x,p.y+t*dy-c.y)<node.r+padding;
+  });
+ };
+ // Most corridors are unobstructed. Only allocate/rasterize a grid when a detour is needed.
+ let occupancy;
+ const prepareOccupancy=()=>{
+  if (occupancy) return;
+ occupancy=new Uint8Array(cols*rows);
+ for(const node of obstacles) {
+  const c=center(node),radius=node.r+padding;
+  const minX=Math.max(0,Math.floor((c.x-radius)/step)),maxX=Math.min(cols-1,Math.ceil((c.x+radius)/step));
+  const minY=Math.max(0,Math.floor((c.y-radius)/step)),maxY=Math.min(rows-1,Math.ceil((c.y+radius)/step));
+  for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++)if(Math.hypot(x*step-c.x,y*step-c.y)<radius)occupancy[y*cols+x]=1;
+ }
+ };
  const search=(start,goal)=>{
+  const endpoint = gate && goal === gate ? approach : b;
+  if (clearSegment(a, endpoint)) return [a, endpoint];
+  prepareOccupancy();
   const total=cols*rows,previous=new Int32Array(total),cost=new Int32Array(total),closed=new Uint8Array(total);
   previous.fill(-2);cost.fill(2147483647);
   const first=index(start.x,start.y),last=index(goal.x,goal.y);
@@ -220,13 +235,7 @@ export function routeCircleConnection(source, target, circles, width, height, re
  legs[0][0]=a;
  if(gate)legs[0][legs[0].length-1]=approach;
  legs.at(-1)[legs.at(-1).length-1]=b;
- const clear=(p,q)=>{
-  const dx=q.x-p.x,dy=q.y-p.y,length2=dx*dx+dy*dy;
-  return !obstacles.some(node=>{
-   const c=center(node),t=length2?Math.max(0,Math.min(1,((c.x-p.x)*dx+(c.y-p.y)*dy)/length2)):0;
-   return Math.hypot(p.x+t*dx-c.x,p.y+t*dy-c.y)<node.r+padding;
-  });
- };
+ const clear = clearSegment;
  const simplified=[];
  for(const points of legs){
   const segment=[points[0]];

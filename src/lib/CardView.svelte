@@ -1291,7 +1291,8 @@
 			{@const interactionTypes = getInteractionTypes(row.interaction)}
 			{@const interactionType = getInteractionType(row.interaction)}
 						{@const entry = row}
-						{@const allPublishers = Array.isArray(entry.organization_publisher_named_in_deal_suit) ? entry.organization_publisher_named_in_deal_suit : []}
+						{@const allPublishers = interactionType === 'grant' && Array.isArray(entry.named_organizations) && entry.named_organizations.length ? entry.named_organizations : (entry.organization_publisher_named_in_deal_suit || [])}
+                        {@const grantRecipients = interactionType === 'grant' ? [...new Set([...(entry.grantees || []), ...(entry.affected_publications || [])])].filter(name => !allPublishers.some(org => normalizeName(org) === normalizeName(name))) : []}
 							{@const allSources = normalizeSources(entry.sources)}
                             {@const hasCaseNumber = interactionType === 'lawsuit' && entry.case_number && !['unknown', '(unknown)', '—', 'nan'].includes(String(entry.case_number).trim().toLowerCase())}
 
@@ -1429,6 +1430,13 @@
 {@render entityNetworkIcon(row.id, org, 'publisher')}
 										{@render countryFlags(entry, org)}
 									</div>
+                                    {#if grantRecipients.length && allPublishers.length === 1}
+                                     <div class="affected-publications">
+                                      {#each grantRecipients as recipient}
+                                       <div class="affected-title"><span class="hierarchy-label">Grantee: </span>{@html highlightText(recipient)}{@render countryFlags(entry, recipient)}</div>
+                                      {/each}
+                                     </div>
+                                    {/if}
 									{#if hasMatches}
 										<div class="affected-publications">
 											{#snippet renderNode(node, parentName = null)}

@@ -57,16 +57,27 @@ export function normalizeData(rawDataArray) {
                 }
             }
             
+            const interaction = normalizeArray(row?.Interaction);
+            const grantees = normalizeArray(row?.Grantees);
+            const affectedPublications = normalizeArray(row?.['Affected Publications']);
+            const namedOrganizations = normalizeArray(row?.['News Org(s)']);
+            // Grant beneficiaries are explicit participants, not ownership descendants.
+            const publishers = interaction.some(value => String(value).toLowerCase() === 'grant')
+                ? [...new Set([...namedOrganizations, ...grantees, ...affectedPublications])]
+                : namedOrganizations;
+
             return {
                 id: row?.id != null ? row.id : index, // Use row.id if available, otherwise use index
                 date: row?.Date || null,
-                interaction: normalizeArray(row?.Interaction),
+                interaction,
                 platform: normalizeArray(row?.['AI Company']),
-                publishers: normalizeArray(row?.['News Org(s)']),
+                publishers,
                 type: normalizeArray(row?.Type),
                 reported_details: row?.['Reported Details'] || '',
-                organization_publisher_named_in_deal_suit: normalizeArray(row?.['News Org(s)']),
-                affected_publications: normalizeArray(row?.['Affected Publications']),
+                organization_publisher_named_in_deal_suit: publishers,
+                grantees,
+                named_organizations: namedOrganizations,
+                affected_publications: affectedPublications,
                 parent_child_matches: Array.isArray(row?.['parent_child_matches']) ? row['parent_child_matches'] : [],
                 docket: row?.Docket || null,
                 additional_coverage: row?.['Additional Coverage'] || null,
