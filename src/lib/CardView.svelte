@@ -2252,6 +2252,9 @@
 
 	.type-tag {
 		display: inline-block;
+		min-width: 0;
+		max-width: 100%;
+		box-sizing: border-box;
 		background-color: #f5f5f5;
 		color: #333;
 		padding: 0.25rem 0.6rem;
@@ -2259,7 +2262,8 @@
 		font-size: 0.75rem;
 		font-weight: 500;
 		line-height: 1.3;
-		white-space: nowrap;
+		white-space: normal;
+		overflow-wrap: anywhere;
 		margin: 0.2rem 0.2rem 0.2rem 0;
 		border: 1px solid #e0e0e0;
 	}
@@ -2289,7 +2293,7 @@
 	/* Two Column Content Layout */
 	.card-content {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 		gap: 0;
 		padding: 1.5rem;
 		position: relative;
@@ -2963,4 +2967,3 @@
 		}
 	}
 </style>
-
