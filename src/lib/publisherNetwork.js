@@ -6,7 +6,9 @@ export function publisherNames(row) {
 }
 
 // Join ownership lineages across all records; never infer ownership from co-participation.
+const ownershipCache = new WeakMap();
 export function buildOwnershipGraph(data) {
+ if (ownershipCache.has(data)) return ownershipCache.get(data);
  const graph = new Map();
  const add = name => {
   const key = normalizeName(name);
@@ -29,6 +31,7 @@ export function buildOwnershipGraph(data) {
    }
   }
  }
+ ownershipCache.set(data, graph);
  return graph;
 }
 export function ownershipFamily(graph, name) {

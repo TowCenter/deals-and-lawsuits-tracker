@@ -11,7 +11,12 @@
  let selectedOrigin = $state(untrack(() => !entityName));
  let selectedPlatform = $state(untrack(() => entityPlatform));
  let selectedPublisher = $state(untrack(() => entityName && !entityPlatform ? normalize(entityName) : null));
- const panelRecords = $derived(selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => node.key === selectedPublisher)) : selectedPlatform ? entries.filter(entry => entry.companies.includes(selectedPlatform)) : selectedRecord ? [selectedRecord] : []);
+ const panelRecords = $derived(selectedKind
+  ? entries.filter(entry => kind(entry) === selectedKind && connectionNodes(entry).length > 0)
+  : selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => node.key === selectedPublisher))
+  : selectedPlatform ? entries.filter(entry => entry.companies.includes(selectedPlatform))
+  : selectedRecord ? [selectedRecord] : []);
+
  let expanded = $state(false);
  let dialog;
  let mapViewport;
@@ -124,13 +129,17 @@
  });
  const platformNodes = $derived(new Map(graphNodes.filter(node => node.key.startsWith('platform:')).map(node => [node.name,node])));
  const nodeByName = $derived(new Map(displayNodes.map(node => [node.key,node])));
+ let hoveredKind = $state(null);
+ let selectedKind = $state(null);
  let hoveredConnection = $state(null);
  let selectedConnection = $state(null);
  function selectConnection(connection) { if (suppressGraphClick) return; selectedOrigin = false; selectedPublisher = null; selectedPlatform = null; selectedConnection = connection; selectedRecord = connection.entry; }
- function clearSelection() { selectedOrigin = false; selectedRecord = null; selectedPublisher = null; selectedPlatform = null; selectedConnection = null; hoveredConnection = null; hoveredPublisher = null; hoveredPlatform = null; }
+ function clearSelection() { selectedKind = null; selectedOrigin = false; selectedRecord = null; selectedPublisher = null; selectedPlatform = null; selectedConnection = null; hoveredConnection = null; hoveredPublisher = null; hoveredPlatform = null; }
  let hoveredPublisher = $state(null);
  let hoveredPlatform = $state(null);
  function activeConnection(entry, node = null, company = null) {
+  const interactionKind = hoveredKind || selectedKind;
+  if (interactionKind) return kind(entry) === interactionKind;
   if (hoveredPlatform != null) return company === hoveredPlatform;
   if (hoveredPublisher != null) return node ? node.key === hoveredPublisher : connectionNodes(entry).some(node => node.key === hoveredPublisher);
   if (hoveredConnection != null) return entry.id === hoveredConnection.entry.id;
@@ -140,7 +149,7 @@
   if (selectedOrigin) return entry.id === row.id || Boolean(row.lawsuit_id && entry.lawsuit_id === row.lawsuit_id);
   return false;
  }
- const highlighting = $derived(selectedOrigin || selectedPublisher != null || selectedPlatform != null || selectedConnection != null || hoveredPublisher != null || hoveredPlatform != null || hoveredConnection != null);
+ const highlighting = $derived(hoveredKind != null || selectedKind != null || selectedOrigin || selectedPublisher != null || selectedPlatform != null || selectedConnection != null || hoveredPublisher != null || hoveredPlatform != null || hoveredConnection != null);
  function connectionNodes(entry) {
   const direct = (entry.organization_publisher_named_in_deal_suit || []).map(normalize);
   return [...new Set(direct)].map(key => nodeByName.get(key)).filter(Boolean);
@@ -204,23 +213,65 @@
   return descendants;
  });
  const highlightedCompanies = $derived(new Set(connections.filter(link => activeConnection(link.entry, link.node, link.company)).map(link => link.company)));
+ const routeKey = connection => JSON.stringify([connection.node.key,connection.company]);
+ let routedPaths = $state(new Map());
+ let routing = $state(false);
+ let routingError = $state(false);
  const routeCache = new WeakMap();
- const routedPaths = $derived.by(() => {
-  const paths = new Map();
-  let shared = routeCache.get(graphNodes);
-  if (!shared) { shared = new Map(); routeCache.set(graphNodes, shared); }
-  for (const connection of connections) {
-   const key = JSON.stringify([connection.node.key,connection.company]);
-   if (!shared.has(key)) {
-    const target = platformNodes.get(connection.company);
-    const corridor = {x:target.x - 96, y:target.y + target.r};
-    shared.set(key, routeCircleConnection(connection.node, target, graphNodes, graphWidth, height, false, corridor));
-   }
-   paths.set(connection, shared.get(key));
+ $effect(() => {
+  const nodes=graphNodes;
+  const geometry=node=>({key:node.key,x:node.x,y:node.y,r:node.r});
+  const workerNodes=nodes.map(geometry);
+  const links=connections;
+  const width=graphWidth,canvasHeight=height;
+  const cached=routeCache.get(nodes);
+  if(cached){routedPaths=cached;routing=false;return;}
+  const routes=new Map();
+  for(const connection of links){
+   const key=routeKey(connection);
+   if(routes.has(key))continue;
+   routes.set(key,{key,source:geometry(connection.node),target:geometry(platformNodes.get(connection.company))});
   }
-  return paths;
+  routedPaths=new Map();routing=routes.size>0;routingError=false;
+  if(!routes.size)return;
+  let worker, fallbackTimer, cancelled=false;
+  const accumulated=new Map(),pending=[...routes.values()];
+  const publish=complete=>{
+   if(cancelled)return;
+   routedPaths=new Map(accumulated);
+   if(complete){routeCache.set(nodes,routedPaths);routing=false;worker?.terminate();}
+  };
+  // Worker startup or cloning failures must not leave the graph without lines.
+  const fallback=()=>{
+   worker?.terminate();
+   let index=0;
+   const step=()=>{
+    if(cancelled)return;
+    const start=performance.now();
+    try {
+     do {
+      const {key,source,target}=pending[index++];
+      accumulated.set(key,routeCircleConnection(source,target,workerNodes,width,canvasHeight,false,{x:target.x-96,y:target.y+target.r}));
+     } while(index<pending.length && performance.now()-start<8);
+     publish(index===pending.length);
+     if(index<pending.length)fallbackTimer=setTimeout(step,0);
+    } catch {routing=false;routingError=true;}
+   };
+   fallbackTimer=setTimeout(step,0);
+  };
+  try {
+   worker=new Worker(new URL('./publisherNetwork.worker.js',import.meta.url),{type:'module'});
+   worker.onmessage=event=>{
+    for(const [key,path] of event.data.paths)accumulated.set(key,path);
+    publish(event.data.complete);
+   };
+   worker.onerror=fallback;
+   worker.onmessageerror=fallback;
+   worker.postMessage({nodes:workerNodes,routes:pending,width,height:canvasHeight});
+  } catch {fallback();}
+  return ()=>{cancelled=true;worker?.terminate();clearTimeout(fallbackTimer);};
  });
- function curve(connection) { return routedPaths.get(connection) || ''; }
+ function curve(connection) { return routedPaths.get(routeKey(connection)) || ''; }
  const kinds = entry => (entry.interaction || []).map(value => String(value).toLowerCase());
  const kind = entry => kinds(entry).some(v => v.includes('lawsuit')) ? 'lawsuit' : kinds(entry).some(v => v.includes('grant')) ? 'grant' : 'deal';
  onMount(() => {
@@ -297,8 +348,20 @@
  <header><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}</h2>{#if !entityName}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls"><button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
- <div class="legend"><span class="interaction-tag lawsuit">Lawsuit</span><span class="interaction-tag deal">Deal</span><span class="interaction-tag grant">Grant</span></div>
+ <div class="legend" aria-label="Highlight relationship types">
+  {#each ['lawsuit', 'deal', 'grant'] as interaction}
+   <button class="interaction-tag {interaction}" aria-pressed={selectedKind === interaction}
+    onpointerenter={event => { if(event.pointerType !== 'touch') hoveredKind = interaction; }}
+    onpointerleave={() => hoveredKind = null}
+    onfocus={() => hoveredKind = interaction} onblur={() => hoveredKind = null}
+    onclick={() => selectedKind = selectedKind === interaction ? null : interaction}>
+    {interaction === 'lawsuit' ? 'Lawsuit' : interaction === 'deal' ? 'Deal' : 'Grant'}
+   </button>
+  {/each}
+ </div>
 
+ {#if routing}<p class="routing-status" role="status">Drawing connections…</p>{/if}
+ {#if routingError}<p class="routing-status" role="alert">Connections could not be drawn. Close and reopen the network to retry.</p>{/if}
  <div class="network-content" class:has-selection={panelRecords.length > 0}>
  <div class="scroll" role="application" tabindex="0" aria-label="Relationship graph. Drag to pan, pinch to zoom. Keyboard: arrows to pan, plus or minus to zoom, Home to fit." onkeydown={handleMapKey} bind:this={mapViewport} onwheel={event => { event.preventDefault(); const bounds = mapViewport.getBoundingClientRect(); zoomAt(event.deltaY < 0 ? 1.12 : 1/1.12, event.clientX-bounds.left, event.clientY-bounds.top); }} onpointerdown={beginGesture} onclickcapture={handleMapClick}><div class="scaled-area" style:width="{graphWidth * mapScale}px" style:height="{height * mapScale}px"><div class="map" style:width="{graphWidth}px" style:height="{height}px" style:transform="translate({cameraX}px, {cameraY}px) scale({mapScale * cameraZoom})">
  
@@ -333,7 +396,7 @@
 
  {#if panelRecords.length}
   <section class="selected-record" aria-label="Selected record" aria-live="polite">
-   {@render recordCard(panelRecords, selectedPlatform == null && selectedPublisher == null)}
+   {@render recordCard(panelRecords, selectedKind == null && selectedPlatform == null && selectedPublisher == null)}
   </section>
  {/if}
  </div>
@@ -351,8 +414,11 @@
  .window-controls { display:flex; align-items:center; gap:.75rem; flex-shrink:0; }
  .resize { min-height:36px; font:inherit; font-size:.75rem; border:1px solid #ddd; background:#fff; color:#254c6f; padding:.25rem .6rem; cursor:pointer; }
  .close { min-width:40px; min-height:40px; border:0; background:none; font-size:1.2rem; cursor:pointer; }
+ .routing-status { margin:0 0 .5rem; font-size:.8rem; color:#555; }
  .legend { display:flex; gap:.4rem; margin-bottom:.65rem; }
- .interaction-tag { padding:.2rem .5rem; border-radius:3px; font-size:.65rem; text-transform:uppercase; letter-spacing:.5px; }
+ .interaction-tag { font-family:inherit; border:0; cursor:pointer; padding:.2rem .5rem; border-radius:3px; font-size:.65rem; text-transform:uppercase; letter-spacing:.5px; }
+ .interaction-tag:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
+ .interaction-tag[aria-pressed="true"] { box-shadow:inset 0 0 0 1px currentColor; }
  .interaction-tag.lawsuit { background:#f5c2c2; color:#8b1a1a; }
  .interaction-tag.deal { background:#c8e6c9; color:#2e7d32; }
  .interaction-tag.grant { background:#bbdefb; color:#1565c0; }
@@ -403,7 +469,8 @@
   h2 { font-size:1.1rem; overflow-wrap:anywhere; }
   .window-controls { gap:.25rem; }
   .resize,.close { min-height:44px; }
-  .legend { flex-wrap:wrap; }
+  .routing-status { margin:0 0 .5rem; font-size:.8rem; color:#555; }
+ .legend { flex-wrap:wrap; }
   .network-content.has-selection { grid-template-columns:minmax(0,1fr); }
   .scroll,dialog.expanded .scroll { height:60dvh; min-height:240px; }
   .network-content.has-selection .scroll { height:45dvh; }
