@@ -2,7 +2,7 @@
  import { isMdlConsolidation } from './mdl.js';
  import { onMount, untrack } from 'svelte';
  import { formatDate } from './utils.js';
- import { publisherNames as names, normalizeName as normalize, buildOwnershipGraph, ownershipFamily, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
+ import { publisherNames as names, normalizeName as normalize, buildOwnershipGraph, ownershipFamily, publisherAndAncestors, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
  let { row, data = [], onclose, recordCard, entityName = null, entityPlatform = null } = $props();
  const componentId = $props.id();
  const arrowId = `${componentId}-lawsuit-arrow`;
@@ -13,7 +13,7 @@
  let selectedPublisher = $state(untrack(() => entityName && !entityPlatform ? normalize(entityName) : null));
  const panelRecords = $derived(selectedKind
   ? entries.filter(entry => kind(entry) === selectedKind && connectionNodes(entry).length > 0)
-  : selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => node.key === selectedPublisher))
+  : selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => publisherAndAncestors(ownership, selectedPublisher).has(node.key)))
   : selectedPlatform ? entries.filter(entry => entry.companies.includes(selectedPlatform))
   : selectedRecord ? [selectedRecord] : []);
 
@@ -153,6 +153,20 @@
   if (selectedOrigin) return entry.id === row.id || Boolean(row.lawsuit_id && entry.lawsuit_id === row.lawsuit_id);
   return false;
  }
+ const inheritedAncestorKeys = $derived.by(() => {
+  if (hoveredKind || selectedKind || hoveredPlatform || hoveredConnection) return new Set();
+  const publisher = hoveredPublisher || selectedPublisher;
+  if (!publisher) return new Set();
+  const ancestors = publisherAndAncestors(ownership, publisher);
+  ancestors.delete(publisher);
+  return ancestors;
+ });
+ function inheritedConnection(connection) {
+  return inheritedAncestorKeys.has(connection.node.key);
+ }
+ function emphasizedConnection(connection) {
+  return inheritedConnection(connection) || activeConnection(connection.entry, connection.node, connection.company);
+ }
  const highlighting = $derived(hoveredKind != null || selectedKind != null || selectedOrigin || selectedPublisher != null || selectedPlatform != null || selectedConnection != null || hoveredPublisher != null || hoveredPlatform != null || hoveredConnection != null);
  function connectionNodes(entry) {
   const direct = (entry.organization_publisher_named_in_deal_suit || []).map(normalize);
@@ -197,7 +211,7 @@
    const existing = groups.get(key);
    if (!existing || (!activeConnection(existing.entry,existing.node,existing.company) && activeConnection(connection.entry,connection.node,connection.company))) groups.set(key,connection);
   }
-  return [...groups.values()].sort((a,b) => Number(activeConnection(a.entry,a.node,a.company)) - Number(activeConnection(b.entry,b.node,b.company)));
+  return [...groups.values()].sort((a,b) => Number(emphasizedConnection(a)) - Number(emphasizedConnection(b)));
  });
  const highlightedPublishers = $derived.by(() => {
   const keys = new Set(connections.filter(link => activeConnection(link.entry, link.node, link.company)).map(link => link.node.key));
@@ -216,7 +230,7 @@
   }
   return descendants;
  });
- const highlightedCompanies = $derived(new Set(connections.filter(link => activeConnection(link.entry, link.node, link.company)).map(link => link.company)));
+ const highlightedCompanies = $derived(new Set(connections.filter(emphasizedConnection).map(link => link.company)));
  const routeKey = connection => JSON.stringify([connection.node.key,connection.company]);
  let routedPaths = $state(new Map());
  let routing = $state(false);
@@ -351,9 +365,10 @@
  <header><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}</h2>{#if !entityName}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls"><button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
- <div class="legend" aria-label="Highlight relationship types">
+ <div class="legend" aria-label="Filter relationship types">
+  <span class="legend-hint">Filter relationships:</span>
   {#each ['lawsuit', 'deal', 'grant'] as interaction}
-   <button class="interaction-tag {interaction}" aria-pressed={selectedKind === interaction}
+   <button type="button" title={`Filter ${interaction}s; click again to show all`} class="interaction-tag {interaction}" aria-pressed={selectedKind === interaction}
     onpointerenter={event => { if(event.pointerType !== 'touch') hoveredKind = interaction; }}
     onpointerleave={() => hoveredKind = null}
     onfocus={() => hoveredKind = interaction} onblur={() => hoveredKind = null}
@@ -361,6 +376,7 @@
     {interaction === 'lawsuit' ? 'Lawsuit' : interaction === 'deal' ? 'Deal' : 'Grant'}
    </button>
   {/each}
+  {#if inheritedAncestorKeys.size}<span class="inheritance-key">Dashed = inherited from parent</span>{/if}
  </div>
 
  {#if routing}<p class="routing-status" role="status">Drawing connections…</p>{/if}
@@ -382,7 +398,7 @@
   {#each drawnConnections as connection}
    <g role="button" tabindex="0" aria-label={`${connection.node.name} — ${connection.entry.interaction.join(' / ')} — ${connection.company}, ${formatDate(connection.entry.date)}`} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredConnection = connection; }} onpointerleave={() => hoveredConnection = null} onfocus={() => hoveredConnection = connection} onblur={() => hoveredConnection = null} onclick={() => selectConnection(connection)} onkeydown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectConnection(connection); } }}>
     <path class="hit-area" d={curve(connection)} />
-    <path marker-end={kind(connection.entry) === 'lawsuit' ? `url(#${highlighting && !activeConnection(connection.entry, connection.node, connection.company) ? mutedArrowId : arrowId})` : undefined} class={kind(connection.entry)} class:highlighted={activeConnection(connection.entry, connection.node, connection.company)} class:muted={highlighting && !activeConnection(connection.entry, connection.node, connection.company)} d={curve(connection)} />
+    <path marker-end={kind(connection.entry) === 'lawsuit' ? `url(#${highlighting && !emphasizedConnection(connection) ? mutedArrowId : arrowId})` : undefined} class={kind(connection.entry)} class:inherited={inheritedConnection(connection)} class:highlighted={emphasizedConnection(connection)} class:muted={highlighting && !emphasizedConnection(connection)} d={curve(connection)} />
    </g>
   {/each}
  </svg>
@@ -420,8 +436,11 @@
  .resize { min-height:36px; font:inherit; font-size:.75rem; border:1px solid #ddd; background:#fff; color:#254c6f; padding:.25rem .6rem; cursor:pointer; }
  .close { min-width:40px; min-height:40px; border:0; background:none; font-size:1.2rem; cursor:pointer; }
  .routing-status { margin:0 0 .5rem; font-size:.8rem; color:#555; }
- .legend { display:flex; gap:.4rem; margin-bottom:.65rem; }
- .interaction-tag { font-family:inherit; border:0; cursor:pointer; padding:.2rem .5rem; border-radius:3px; font-size:.65rem; text-transform:uppercase; letter-spacing:.5px; }
+ .legend { display:flex; align-items:center; flex-wrap:wrap; gap:.4rem; margin-bottom:.65rem; }
+ .legend-hint,.inheritance-key {font-size:.75rem;color:#555;margin-right:.35rem;}
+ .inheritance-key {margin-left:.5rem;}
+ .interaction-tag { display:inline-flex;align-items:center;gap:.5rem;min-height:34px; font-family:inherit; border:1px solid currentColor; cursor:pointer; padding:.2rem .5rem; border-radius:3px; font-size:.65rem; text-transform:uppercase; letter-spacing:.5px; }
+ .interaction-tag:hover {filter:brightness(.95);box-shadow:0 1px 3px #0002;}
  .interaction-tag:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
  .interaction-tag[aria-pressed="true"] { box-shadow:inset 0 0 0 1px currentColor; }
  .interaction-tag.lawsuit { background:#f5c2c2; color:#8b1a1a; }
@@ -453,6 +472,7 @@
  g:focus { outline:none; }
  svg > g > path { fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
  path.lawsuit { stroke:#b4232d; } path.deal { stroke:#218239; } path.grant { stroke:#176ac1; }
+ path.inherited {stroke-dasharray:7 5;}
  path.highlighted:not(.hit-area) { stroke-width:2.5; }
  path.lawsuit.muted { stroke:#f4dee0; }
  path.deal.muted { stroke:#deece1; }
