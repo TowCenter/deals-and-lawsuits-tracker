@@ -2,7 +2,7 @@
  import { isMdlConsolidation } from './mdl.js';
  import { onMount, untrack } from 'svelte';
  import { formatDate } from './utils.js';
- import { publisherNames as names, normalizeName as normalize, buildOwnershipGraph, ownershipFamily, layoutOwnership, layoutCirclePacking, routeCircleConnection } from './publisherNetwork.js';
+ import { publisherNames as names, normalizeName as normalize, buildOwnershipGraph, ownershipFamily, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
  let { row, data = [], onclose, recordCard, entityName = null, entityPlatform = null } = $props();
  const componentId = $props.id();
  const arrowId = `${componentId}-lawsuit-arrow`;
@@ -100,10 +100,14 @@
   const node = platformNodes.get(company);
   draggingPlatform = {company, startX:event.clientX, startY:event.clientY, x:node.x, y:node.y, moved:false};
  }
- const graphNodes = $derived(layoutCirclePacking(hierarchy.nodes, ownershipLinks, graphWidth, height, companies).map(node => {
+ const graphNodes = $derived.by(() => {
+  const packed=layoutCirclePacking(hierarchy.nodes,ownershipLinks,graphWidth,height,companies);
+  if(!platformPositions.size)return packed;
+  return packed.map(node => {
   const position = platformPositions.get(node.name);
   return node.key.startsWith('platform:') && position ? {...node, x:Math.max(0, Math.min(graphWidth-node.width,position.x)), y:Math.max(0,Math.min(height-node.height,position.y))} : node;
- }));
+  });
+ });
  const displayNodes = $derived(graphNodes.filter(node => !node.key.startsWith('platform:')));
  const visibleLabels = $derived.by(() => {
   const scale = mapScale * cameraZoom;
@@ -217,7 +221,7 @@
  let routedPaths = $state(new Map());
  let routing = $state(false);
  let routingError = $state(false);
- const routeCache = new WeakMap();
+ const routeCache = networkRouteCache;
  $effect(() => {
   const nodes=graphNodes;
   const geometry=node=>({key:node.key,x:node.x,y:node.y,r:node.r});
@@ -225,7 +229,7 @@
   const links=connections;
   const width=graphWidth,canvasHeight=height;
   const cached=routeCache.get(nodes);
-  if(cached){routedPaths=cached;routing=false;return;}
+  if(cached && links.every(link => cached.has(routeKey(link)))){routedPaths=cached;routing=false;routingError=false;return;}
   const routes=new Map();
   for(const connection of links){
    const key=routeKey(connection);
@@ -238,8 +242,7 @@
   const accumulated=new Map(),pending=[...routes.values()];
   const publish=complete=>{
    if(cancelled)return;
-   routedPaths=new Map(accumulated);
-   if(complete){routeCache.set(nodes,routedPaths);routing=false;worker?.terminate();}
+   if(complete){routedPaths=new Map(accumulated);routeCache.set(nodes,routedPaths);routing=false;worker?.terminate();}
   };
   // Worker startup or cloning failures must not leave the graph without lines.
   const fallback=()=>{
@@ -363,6 +366,8 @@
  {#if routing}<p class="routing-status" role="status">Drawing connections…</p>{/if}
  {#if routingError}<p class="routing-status" role="alert">Connections could not be drawn. Close and reopen the network to retry.</p>{/if}
  <div class="network-content" class:has-selection={panelRecords.length > 0}>
+ <!-- This application surface deliberately handles pan/zoom and implements its documented keyboard controls. -->
+ <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
  <div class="scroll" role="application" tabindex="0" aria-label="Relationship graph. Drag to pan, pinch to zoom. Keyboard: arrows to pan, plus or minus to zoom, Home to fit." onkeydown={handleMapKey} bind:this={mapViewport} onwheel={event => { event.preventDefault(); const bounds = mapViewport.getBoundingClientRect(); zoomAt(event.deltaY < 0 ? 1.12 : 1/1.12, event.clientX-bounds.left, event.clientY-bounds.top); }} onpointerdown={beginGesture} onclickcapture={handleMapClick}><div class="scaled-area" style:width="{graphWidth * mapScale}px" style:height="{height * mapScale}px"><div class="map" style:width="{graphWidth}px" style:height="{height}px" style:transform="translate({cameraX}px, {cameraY}px) scale({mapScale * cameraZoom})">
  
  <svg width={graphWidth} {height} aria-label="Publisher connections">

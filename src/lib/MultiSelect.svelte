@@ -146,8 +146,6 @@
 		class="checkbox-label"
 		class:in-group={indented}
 		class:unavailable={isUnavailable(option)}
-		role="option"
-		aria-selected={selectedValues.includes(option)}
 	>
 		<input
 			type="checkbox"
@@ -167,7 +165,7 @@
 		class="multiselect-trigger"
 		bind:this={buttonRef}
 		onclick={() => isOpen = !isOpen}
-		aria-haspopup="listbox"
+		aria-haspopup="true"
 		aria-expanded={isOpen}
 		aria-label="{label} selector"
 		type="button"
@@ -177,7 +175,7 @@
 	</button>
 
 	{#if isOpen}
-		<div class="multiselect-dropdown" role="listbox" aria-label="{label} options">
+		<div class="multiselect-dropdown" role="group" aria-label="{label} options">
 			<div class="dropdown-header">
 				<span aria-live="polite">{selectedValues.length} of {options.length} selected</span>
 				{#if selectedValues.length > 0}

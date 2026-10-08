@@ -1,7 +1,7 @@
 {
   "name": "deals-and-lawsuits-tracker",
   "version": "0.1.0",
-  "description": "Tow Center AI Deals and Disputes Tracker — a static site tracking deals, grants, and lawsuits between news publishers and AI companies",
+  "description": "Tow Center AI Deals and Disputes Tracker \u2014 a static site tracking deals, grants, and lawsuits between news publishers and AI companies",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,8 @@
     "build": "npm run build --prefix demo-app",
     "preview": "npm run preview --prefix demo-app",
     "check": "npm run check --prefix demo-app",
-    "install:app": "npm ci --prefix demo-app"
+    "install:app": "npm ci --prefix demo-app",
+    "test": "node --test tests/*.test.js"
   },
   "keywords": [
     "journalism",

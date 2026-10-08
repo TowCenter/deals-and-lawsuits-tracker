@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildOwnershipGraph,layoutOwnership,layoutCirclePacking,routeCircleConnection} from '../src/lib/publisherNetwork.js';
+import {buildOwnershipGraph,publisherAndAncestors,layoutOwnership,layoutCirclePacking,routeCircleConnection} from '../src/lib/publisherNetwork.js';
 const data=[{organization_publisher_named_in_deal_suit:['Parent'],parent_child_matches:[{lineage:['Parent','Child','Grandchild']},{lineage:['Parent','Sibling']},{lineage:['Other parent','Child']}]}];
 test('shared children appear once, with grandchildren inside their parent',()=>{
  const graph=buildOwnershipGraph(data),layout=layoutOwnership(graph,new Set(graph.keys()));
@@ -49,3 +49,11 @@ test('shared corridors preserve direct endpoints and a common platform approach'
  const obstacle={key:'blocking',x:390,y:170,r:40};
  assert(routeCircleConnection(sources[0],platform,[...circles,obstacle],650,400,false,corridor));
 });
+
+ test('relationship inheritance follows parents and grandparents, never children or siblings', () => {
+  const graph = buildOwnershipGraph([{parent_child_matches: [{lineage: ['News Corp', 'New York Post', 'Publication']}, {lineage: ['News Corp', 'Dow Jones']}]}]);
+  assert.deepEqual([...publisherAndAncestors(graph, 'New York Post')], ['new york post', 'news corp']);
+  assert.deepEqual([...publisherAndAncestors(graph, 'Publication')], ['publication', 'new york post', 'news corp']);
+  assert.deepEqual([...publisherAndAncestors(graph, 'News Corp')], ['news corp']);
+  assert(!publisherAndAncestors(graph, 'Dow Jones').has('new york post'));
+ });

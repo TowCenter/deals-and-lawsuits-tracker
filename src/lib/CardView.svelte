@@ -4,6 +4,9 @@
 	import { buildOwnershipGraph, publisherNames, normalizeName } from './publisherNetwork.js';
 	import PublisherNetwork from './PublisherNetwork.svelte';
 	import CardView from './CardView.svelte';
+ import EntityNetworkIcon from './EntityNetworkIcon.svelte';
+ import { createPublisherRelationshipIndex } from './publisherRelationships.js';
+ const relationships = $derived(createPublisherRelationshipIndex(data));
 	let networkRow = $state(null);
  let networkEntity = $state(null);
  function openEntityNetwork(event, name, type) {
@@ -12,6 +15,7 @@
   networkRow = {id:`${type}:${name}`, organization_publisher_named_in_deal_suit:type === 'publisher' ? [name] : [], affected_publications:[], interaction:[], platform:[]};
  }
 	import { parseArray, formatDate, buildCountryIndex, getPlacesForName, getRowLocations } from './utils.js';
+
 
 	/**
 	 * @typedef {Object} Props
@@ -318,7 +322,7 @@
 		
 		// Don't collapse if clicking a link (let it work normally)
 		const target = event.target;
-		if (target.tagName === 'A' || target.closest('a')) {
+		if (target.closest('a, button, input, select, textarea, [role=button]')) {
 			return;
 		}
 		// Collapse the card when clicking anywhere else
@@ -1224,13 +1228,7 @@
 
 {#snippet entityNetworkIcon(rowId, name, type)}
  {#if showEntityNetworks && isCardExpanded(rowId)}
-  <button class="entity-network-icon" aria-label={`View ${name} network`} title={`View ${name} network`} onclick={event => openEntityNetwork(event,name,type)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-   <path d="M12 8V5M12 16v3M8.5 10l-3-1.7M15.5 10l3-1.7M8.5 14l-3 1.7M15.5 14l3 1.7" />
-   <circle cx="12" cy="12" r="4" />
-   <circle cx="12" cy="3" r="2" /><circle cx="12" cy="21" r="2" />
-   <circle cx="4" cy="7.5" r="2" /><circle cx="20" cy="7.5" r="2" />
-   <circle cx="4" cy="16.5" r="2" /><circle cx="20" cy="16.5" r="2" />
-  </svg></button>
+  <EntityNetworkIcon {rowId} {name} {type} {relationships} onopen={openEntityNetwork} />
  {/if}
 {/snippet}
 
@@ -1238,7 +1236,7 @@
  <PublisherNetwork row={networkRow} {data} entityName={networkEntity?.name} entityPlatform={networkEntity?.type === 'platform' ? networkEntity.name : null} onclose={() => { networkRow = null; networkEntity = null; }}>
   {#snippet recordCard(selectedEntries, expandRecord)}
    {#key selectedEntries.map(entry => entry.id).join(',') + expandRecord}
-    <CardView {data} focusedRecordId={expandRecord ? selectedEntries[0]?.id : null} focusedRecordIds={expandRecord ? null : selectedEntries.map(entry => entry.id)} {showCountries} />
+    <CardView {data} showNetworks={false} showEntityNetworks={false} focusedRecordId={expandRecord ? selectedEntries[0]?.id : null} focusedRecordIds={expandRecord ? null : selectedEntries.map(entry => entry.id)} {showCountries} />
    {/key}
   {/snippet}
  </PublisherNetwork>
@@ -1272,6 +1270,7 @@
 		<div
 			class="related-backdrop"
 			onclick={viewAllCards}
+			onkeydown={event => { if (event.key === 'Escape') viewAllCards(); }}
 			role="button"
 			tabindex="-1"
 			aria-label="Dismiss related view"
@@ -1393,7 +1392,9 @@
 
 								<!-- Two Column Layout -->
 								{#if isCardExpanded(row.id)}
-									<div class="card-content" onclick={(e) => handleCardContentClick(e, row.id)}>
+									<!-- The header button provides keyboard collapse; clicking the reading area is an optional shortcut. -->
+                                    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+                                    <div class="card-content" onclick={(e) => handleCardContentClick(e, row.id)}>
 									<!-- Column 1 -->
 									<div class="card-column column-1">
 					<div class="card-field">
@@ -1630,11 +1631,6 @@
 </div>
 
 <style>
- .entity-network-icon { display:inline-flex; vertical-align:middle; align-items:center; justify-content:center; width:26px; height:26px; padding:4px; margin-left:6px; border:0; background:transparent; cursor:pointer; }
- .entity-network-icon { color:#8a949d; transition:color .15s ease; }
- .entity-network-icon svg { width:16px; height:16px; flex-shrink:0; }
- .entity-network-icon:hover { color:#254c6f; }
- .entity-network-icon:focus-visible { outline:2px solid #254c6f; outline-offset:2px; }
 
 	.card-view {
 		width: 100%;

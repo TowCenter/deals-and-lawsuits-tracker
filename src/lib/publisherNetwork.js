@@ -34,6 +34,30 @@ export function buildOwnershipGraph(data) {
  ownershipCache.set(data, graph);
  return graph;
 }
+// Relationships propagate down ownership, never from a child to its parent or siblings.
+const ancestorIndexCache = new WeakMap();
+export function publisherAndAncestors(graph, name) {
+ let parents = ancestorIndexCache.get(graph);
+ if (!parents) {
+  parents = new Map();
+  for (const [parent, node] of graph) {
+   for (const child of node.children) {
+    if (!parents.has(child)) parents.set(child, new Set());
+    parents.get(child).add(parent);
+   }
+  }
+  ancestorIndexCache.set(graph, parents);
+ }
+ const pending = [normalizeName(name)], ancestors = new Set();
+ while (pending.length) {
+  const key = pending.pop();
+  if (!key || ancestors.has(key)) continue;
+  ancestors.add(key);
+  pending.push(...(parents.get(key) || []));
+ }
+ return ancestors;
+}
+
 export function ownershipFamily(graph, name) {
  const pending = [normalizeName(name)];
  const seen = new Set();
@@ -64,8 +88,13 @@ export function layoutOwnership(graph, family) {
  return {nodes};
 }
 
+// Reuse unchanged layouts and their routes when an organization is reopened.
+const packingCache = new Map();
+export const networkRouteCache = new WeakMap();
 // D3 owns hierarchy packing; Svelte recomputes it as the viewport changes.
 export function layoutCirclePacking(nodes, ownershipLinks, width, height, companies) {
+ const cacheKey=JSON.stringify([nodes.map(({key,name,hasChildren})=>[key,name,hasChildren]),ownershipLinks,width,height,companies]);
+ if(packingCache.has(cacheKey))return packingCache.get(cacheKey);
  const byKey = new Map(nodes.map(node => [node.key, node]));
  const children = new Map(nodes.map(node => [node.key, []]));
  const childKeys = new Set();
@@ -108,6 +137,8 @@ export function layoutCirclePacking(nodes, ownershipLinks, width, height, compan
    y:Math.max(16, (height - count * spacing) / 2) + row * spacing + 12,
    width:radius*2, height:radius*2, r:radius});
  });
+ if(packingCache.size>=12)packingCache.delete(packingCache.keys().next().value);
+ packingCache.set(cacheKey,result);
  return result;
 }
 
@@ -115,13 +146,20 @@ export function routeCircleConnection(source, target, circles, width, height, re
  const center = node => ({x:node.x+node.r,y:node.y+node.r});
  const a=center(source),b=center(target),padding=retry ? 0 : Math.min(8, source.r*.15);
  // Ancestor boundaries enclose the source; crossing them is necessary to exit.
- const obstacles=circles.filter(node=>node.key!==source.key&&node.key!==target.key)
+ const candidates=circles.filter(node=>node.key!==source.key&&node.key!==target.key)
   .filter(node=> {
    const distance = Math.hypot(center(node).x-a.x,center(node).y-a.y);
    // Ancestors must be crossed to leave the family; descendants are inside
    // the source endpoint and cannot obstruct its outward connection.
    return distance + source.r > node.r + .5 && distance + node.r > source.r + .5;
   });
+ // Children fully inside an obstacle add no additional blocked area.
+ // Route against enclosing circles once instead of every publication inside them.
+ const obstacles=[];
+ for(const node of candidates.sort((a,b)=>b.r-a.r)){
+  const c=center(node);
+  if(!obstacles.some(parent=>Math.hypot(c.x-center(parent).x,c.y-center(parent).y)+node.r<=parent.r+.001))obstacles.push(node);
+ }
  const blocked=(x,y)=>obstacles.some(node=>Math.hypot(x-center(node).x,y-center(node).y)<node.r+padding);
  // Bound routing work independently of the database or zoomed canvas size.
  const step=retry ? Math.max(3,Math.sqrt(width*height/48000),Math.min(source.r/2,width/256,height/192)) : Math.max(6,width/192,height/128),cols=Math.ceil(width/step),rows=Math.ceil(height/step);
@@ -141,20 +179,38 @@ export function routeCircleConnection(source, target, circles, width, height, re
  const gate = corridorClear
   ? {x:Math.round(approach.x/step),y:Math.round(approach.y/step)} : null;
  const search=(start,goal)=>{
-  const queue=[start],previous=new Map([[index(start.x,start.y),null]]);
-  for(let head=0;head<queue.length;head++) {
-   const cell=queue[head];
-   if(cell.x===goal.x&&cell.y===goal.y){
+  const total=cols*rows,previous=new Int32Array(total),cost=new Int32Array(total),closed=new Uint8Array(total);
+  previous.fill(-2);cost.fill(2147483647);
+  const first=index(start.x,start.y),last=index(goal.x,goal.y);
+  if(first<0||first>=total||last<0||last>=total)return null;
+  const heap=[];
+  const push=(cell,score)=>{
+   let i=heap.length;heap.push({cell,score});
+   while(i>0){const parent=(i-1)>>1;if(heap[parent].score<=score)break;heap[i]=heap[parent];i=parent;}
+   heap[i]={cell,score};
+  };
+  const pop=()=>{
+   const result=heap[0],tail=heap.pop();
+   if(heap.length){let i=0;while(i*2+1<heap.length){let child=i*2+1;if(child+1<heap.length&&heap[child+1].score<heap[child].score)child++;if(heap[child].score>=tail.score)break;heap[i]=heap[child];i=child;}heap[i]=tail;}
+   return result.cell;
+  };
+  previous[first]=-1;cost[first]=0;push(first,0);
+  const directions=[[1,0],[0,1],[0,-1],[-1,0]];
+  while(heap.length){
+   const cell=pop(),x=cell%cols,y=Math.floor(cell/cols);
+   if(closed[cell])continue;
+   closed[cell]=1;
+   if(cell===last){
     const points=[];
-    for(let cursor=cell;cursor;cursor=previous.get(index(cursor.x,cursor.y)))points.push({x:cursor.x*step,y:cursor.y*step});
+    for(let cursor=cell;cursor!==-1;cursor=previous[cursor])points.push({x:(cursor%cols)*step,y:Math.floor(cursor/cols)*step});
     return points.reverse();
    }
-   const directions=[[1,0],[0,1],[0,-1],[-1,0]];
-   directions.sort((u,v)=>Math.hypot(cell.x+u[0]-goal.x,cell.y+u[1]-goal.y)-Math.hypot(cell.x+v[0]-goal.x,cell.y+v[1]-goal.y));
    for(const [dx,dy] of directions){
-    const x=cell.x+dx,y=cell.y+dy,key=index(x,y);
-    if(x<1||y<1||x>=cols-1||y>=rows-1||previous.has(key)||occupancy[key])continue;
-    previous.set(key,cell);queue.push({x,y});
+    const nextX=x+dx,nextY=y+dy,key=index(nextX,nextY);
+    if(nextX<1||nextY<1||nextX>=cols-1||nextY>=rows-1||closed[key]||occupancy[key]||cost[cell]+1>=cost[key])continue;
+    previous[key]=cell;cost[key]=cost[cell]+1;
+    const remaining=Math.abs(nextX-goal.x)+Math.abs(nextY-goal.y);
+    push(key,cost[key]+remaining+remaining*.0001);
    }
   }
   return null;

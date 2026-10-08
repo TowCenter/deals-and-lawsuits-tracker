@@ -182,69 +182,7 @@
         }
     }
 
-    .update-date-divider {
-        margin-bottom: 1.5rem;
-        margin-left: 0;
-    }
+@media screen and (max-width: 768px) {
 
-    .divider-line {
-        height: 1px;
-        background-color: #e0e0e0;
-        margin-top: 0;
-        margin-bottom: 1.25rem;
-        margin-left: 0;
-        margin-right: 0;
-        width: 100%;
-        display: block;
-    }
-
-    .update-date-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 2rem;
-        flex-wrap: wrap;
-    }
-
-    .update-date {
-        font-family: "Lyon Text Web", 'Georgia', serif;
-        font-size: 20px;
-        line-height: 28px;
-        font-weight: normal;
-        color: #222222;
-        text-transform: none;
-        display: block;
-        margin-top: 0;
-        margin-left: 0;
-        letter-spacing: 0;
-    }
-
-    .update-date em {
-        font-style: italic;
-    }
-
-    .update-date strong {
-        font-weight: bold;
-    }
-
-    @media screen and (max-width: 768px) {
-        .update-date-divider {
-            margin-bottom: 1rem;
-            margin-left: 0;
-        }
-
-        .divider-line {
-            margin-bottom: 1rem;
-        }
-
-        .update-date-row {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 1rem;
-        }
-
-        .update-date {
-            font-size: 18px;
-            line-height: 1.6;
-        }
-    }
+}
 </style>

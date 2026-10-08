@@ -194,7 +194,7 @@
 </script>
 
 <div class="hierarchical-filter-container" bind:this={container}>
-	<label class="hierarchical-label">{label}</label>
+	<span class="hierarchical-label">{label}</span>
 	
 	<div class="hierarchical-filter">
 		<button 
@@ -202,7 +202,7 @@
 			type="button"
 			bind:this={buttonRef}
 			onclick={toggleOpen}
-			aria-haspopup="listbox"
+			aria-haspopup="true"
 			aria-expanded={isOpen}
 			aria-label="{label} filter"
 		>
@@ -211,7 +211,7 @@
 		</button>
 
 		{#if isOpen}
-			<div class="dropdown-menu" onclick={stopPropagation} role="listbox" aria-label="{label} filter options">
+			<div class="dropdown-menu" role="group" aria-label="{label} filter options">
 				<div class="menu-header">
 					<span class="header-text" aria-live="polite">
 						{selectedInteraction.length + selectedType.length} selected
@@ -512,30 +512,7 @@
 		flex-shrink: 0;
 	}
 
-	.menu-footer {
-		padding: 0;
-		border-top: 1px solid #eee;
-		background-color: #f9f9f9;
-		flex-shrink: 0;
-	}
-
-	.done-btn {
-		width: 100%;
-		padding: 0.6rem 0.8rem;
-		background-color: #254c6f;
-		color: white;
-		border: none;
-		cursor: pointer;
-		font-size: 0.95rem;
-		font-family: inherit;
-		font-weight: 500;
-	}
-
-	.done-btn:hover {
-		background-color: #1a3a52;
-	}
-
-	@media screen and (max-width: 768px) {
+@media screen and (max-width: 768px) {
 		.dropdown-menu {
 			position: fixed;
 			top: auto;

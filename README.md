@@ -100,3 +100,15 @@ This package is built with SvelteKit. To contribute:
 ## License
 
 MIT
+
+### Network component responsibilities
+
+- `CardView.svelte` owns card state and opens entity networks.
+- `EntityNetworkIcon.svelte` owns icon visibility, hover/focus tooltips and positioning.
+- `NetworkRelationshipPreview.svelte` renders the small tooltip graph.
+- `PublisherNetwork.svelte` owns the interactive full graph and related cards.
+- `publisherRelationships.js` indexes named-party relationships and applies downward inheritance: children inherit parent relationships, while parents and siblings do not inherit child relationships. The current card is included in previews but excluded when deciding whether there are other relationships.
+- `publisherNetwork.js` and its worker handle ownership, layout and routing.
+- `trackerData.js` normalizes the dataset before it reaches UI components.
+
+Dataset arrays are treated as immutable snapshots; replace the array when data changes so cached indexes and layouts are refreshed. Run `npm test`, `npm run check` and `npm run build` after changes.

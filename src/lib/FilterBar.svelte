@@ -317,22 +317,7 @@
 		}
 	}
 
-	.clear-filters-btn {
-		padding: 0.6rem 1rem;
-		background-color: #fff;
-		border: 1px solid #ccc;
-		border-radius: 0;
-		cursor: pointer;
-		font-size: 0.95rem;
-		font-family: inherit;
-	}
-
-	.clear-filters-btn:hover {
-		background-color: #f5f5f5;
-		border-color: #999;
-	}
-
-	.download-csv-btn {
+.download-csv-btn {
 		padding: 0.6rem 1.5rem;
 		background-color: #254c6f;
 		color: white;
