@@ -63,3 +63,21 @@ export function buildRelationshipPreview(index, rowId, name) {
  const platforms = [...edgesByPlatform.keys()].sort();
  return {name, platforms, edges: platforms.flatMap(platform => [...edgesByPlatform.get(platform).values()]), height: Math.max(180, platforms.length * 64)};
 }
+
+/** Expand only recorded ownership children, never funding beneficiaries. */
+export function grantChildPublishers(graph, name) {
+ const children = [];
+ const seen = new Set([normalizeName(name)]);
+ const visit = (key, lineage) => {
+  for (const childKey of graph.get(key)?.children || []) {
+   if (seen.has(childKey)) continue;
+   seen.add(childKey);
+   const child = graph.get(childKey);
+   const childLineage = [...lineage, child.name];
+   children.push({name: child.name, depth: childLineage.length - 1, lineage: childLineage});
+   visit(childKey, childLineage);
+  }
+ };
+ visit(normalizeName(name), [name]);
+ return children;
+}

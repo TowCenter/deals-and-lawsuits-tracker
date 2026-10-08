@@ -1,6 +1,7 @@
+import {buildOwnershipGraph} from '../src/lib/publisherNetwork.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPublisherRelationshipIndex, buildRelationshipPreview } from '../src/lib/publisherRelationships.js';
+import { createPublisherRelationshipIndex, buildRelationshipPreview, grantChildPublishers } from '../src/lib/publisherRelationships.js';
 import { normalizeData } from '../src/lib/trackerData.js';
 
 const records = [
@@ -44,11 +45,34 @@ test('grant recipients combine grantees and affected publications without creati
   {Interaction:['Grant'], 'News Org(s)':['Lenfest'], Grantees:['Newsroom A'], 'Affected Publications':['Newsroom A', 'Newsroom B'], 'AI Company':['OpenAI']},
   {Interaction:['Deal'], 'News Org(s)':['Owner'], 'Affected Publications':['Publication']}
  ]);
- assert.deepEqual(grant.organization_publisher_named_in_deal_suit, ['Lenfest', 'Newsroom A', 'Newsroom B']);
+ assert.deepEqual(grant.organization_publisher_named_in_deal_suit, ['Lenfest', 'Newsroom A']);
+ assert.deepEqual(grant.publishers, ['Lenfest', 'Newsroom A', 'Newsroom B']);
  assert.deepEqual(grant.named_organizations, ['Lenfest']);
  assert.deepEqual(grant.grantees, ['Newsroom A']);
  assert.deepEqual(grant.parent_child_matches, []);
  assert.deepEqual(deal.organization_publisher_named_in_deal_suit, ['Owner']);
  const index = createPublisherRelationshipIndex([grant]);
- assert(index.includes(grant, 'Newsroom B'));
+ assert(!index.includes(grant, 'Newsroom B'));
+});
+
+test('grant child expansion includes recorded descendants without unrelated grant recipients', () => {
+ const graph = buildOwnershipGraph([{parent_child_matches:[{lineage:['Medill','Knight Lab','Project']}], organization_publisher_named_in_deal_suit:['Medill','Unrelated recipient']}]);
+ assert.deepEqual(grantChildPublishers(graph, 'Medill').map(child => child.name), ['Knight Lab','Project']);
+ assert.deepEqual(grantChildPublishers(graph, 'Unrelated recipient'), []);
+});
+
+test('grant normalization preserves direct, downstream and agreement-covered recipient roles', () => {
+ const [row] = normalizeData([{Interaction:['Grant'], Grantees:['Lenfest'], 'Publications Received Grants':['Newsroom A'], 'Affected Publications':['Newsroom B'], 'AI Company':['OpenAI']}]);
+ assert.deepEqual(row.grantees, ['Lenfest']);
+ assert.deepEqual(row.publications_received_grants, ['Newsroom A']);
+ assert.deepEqual(row.affected_publications, ['Newsroom B']);
+ assert.deepEqual(row.publishers, ['Lenfest','Newsroom A','Newsroom B']);
+});
+
+test('agreement-covered children do not create direct platform connections', () => {
+ const rows = normalizeData([{id:1, Interaction:['Grant'], 'AI Company':['OpenAI'], 'News Org(s)':['Craig Newmark'], Grantees:['Craig Newmark'], 'Affected Publications':['Tow-Knight'], parent_child_matches:[{lineage:['Craig Newmark','Tow-Knight']}]}]);
+ const index = createPublisherRelationshipIndex(rows);
+ assert.deepEqual(rows[0].organization_publisher_named_in_deal_suit, ['Craig Newmark']);
+ assert(index.includes(rows[0], 'Tow-Knight')); // inherited through the parent
+ assert.deepEqual(rows[0].affected_publications, ['Tow-Knight']);
 });

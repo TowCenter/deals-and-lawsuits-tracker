@@ -5,7 +5,17 @@
 	import PublisherNetwork from './PublisherNetwork.svelte';
 	import CardView from './CardView.svelte';
  import EntityNetworkIcon from './EntityNetworkIcon.svelte';
+ import GrantPublications from './GrantPublications.svelte';
+ import {buildGrantPresentation} from './grantPresentation.js';
  import { createPublisherRelationshipIndex } from './publisherRelationships.js';
+ const grantOwnership = $derived(buildOwnershipGraph(data));
+ const grantPresentations = $derived.by(() => {
+  const cache = new WeakMap();
+  return row => {
+   if (!cache.has(row)) cache.set(row, buildGrantPresentation(row, grantOwnership));
+   return cache.get(row);
+  };
+ });
  const relationships = $derived(createPublisherRelationshipIndex(data));
 	let networkRow = $state(null);
  let networkEntity = $state(null);
@@ -1292,7 +1302,7 @@
 			{@const interactionType = getInteractionType(row.interaction)}
 						{@const entry = row}
 						{@const allPublishers = interactionType === 'grant' && Array.isArray(entry.named_organizations) && entry.named_organizations.length ? entry.named_organizations : (entry.organization_publisher_named_in_deal_suit || [])}
-                        {@const grantRecipients = interactionType === 'grant' ? [...new Set([...(entry.grantees || []), ...(entry.affected_publications || [])])].filter(name => !allPublishers.some(org => normalizeName(org) === normalizeName(name))) : []}
+
 							{@const allSources = normalizeSources(entry.sources)}
                             {@const hasCaseNumber = interactionType === 'lawsuit' && entry.case_number && !['unknown', '(unknown)', '—', 'nan'].includes(String(entry.case_number).trim().toLowerCase())}
 
@@ -1421,6 +1431,14 @@
 							<div class="affected-note">(Publications named in {interactionType === 'lawsuit' ? 'suit' : interactionType === 'grant' ? 'deal announcement' : 'announcements or confirmed by platform'})</div>
 						</div>
 						<div class="field-value">
+                            {#if interactionType === 'grant'}
+                             <GrantPublications presentation={grantPresentations(entry)}>
+                              {#snippet label(name)}{@html highlightText(name)}{/snippet}
+                              {#snippet flags(name)}{@render countryFlags(entry, name)}{/snippet}
+                              {#snippet networkIcon(name)}{@render entityNetworkIcon(row.id, name, 'publisher')}{/snippet}
+                             </GrantPublications>
+                            {:else}
+
 							{#each allPublishers as org}
 								{@const orgTree = hierarchyTree[org] || {}}
 								{@const hasMatches = Object.keys(orgTree).length > 0 || (orgTree.publications && orgTree.publications.length > 0)}
@@ -1430,13 +1448,7 @@
 {@render entityNetworkIcon(row.id, org, 'publisher')}
 										{@render countryFlags(entry, org)}
 									</div>
-                                    {#if grantRecipients.length && allPublishers.length === 1}
-                                     <div class="affected-publications">
-                                      {#each grantRecipients as recipient}
-                                       <div class="affected-title"><span class="hierarchy-label">Grantee: </span>{@html highlightText(recipient)}{@render countryFlags(entry, recipient)}</div>
-                                      {/each}
-                                     </div>
-                                    {/if}
+
 									{#if hasMatches}
 										<div class="affected-publications">
 											{#snippet renderNode(node, parentName = null)}
@@ -1448,7 +1460,7 @@
 															{@const normalizedParent = parentName ? String(parentName).trim() : ''}
 															{#if normalizedPub !== normalizedParent && normalizedPub !== ''}
 																<div class="affected-title">
-																	{#if interactionType === 'grant'}
+																	{#if interactionType === 'grant' && (entry.publications_received_grants || []).some(name => normalizeName(name) === normalizeName(publication))}
 																		<span class="hierarchy-label">Grantee: </span>
 																	{/if}
 																	{@html highlightText(publication)}
@@ -1460,9 +1472,8 @@
 													{:else}
 														<div class="hierarchy-intermediate">
 															<span class="hierarchy-intermediate-name">
-																{#if interactionType === 'grant'}
-																	<span class="hierarchy-label">Grant Administrator: </span>
-																{/if}
+                                                        {#if interactionType === 'grant' && (entry.publications_received_grants || []).some(name => normalizeName(name) === normalizeName(key))}<span class="hierarchy-label">Grantee: </span>{/if}
+
 																{@html highlightText(key)}
 
 																{@render countryFlags(entry, key)}
@@ -1479,6 +1490,7 @@
 					{/if}
 				</div>
 							{/each}
+                            {/if}
 						</div>
 					</div>
 

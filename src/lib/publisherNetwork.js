@@ -2,7 +2,7 @@ import { hierarchy, pack } from 'd3-hierarchy';
 
 export const normalizeName = name => String(name || '').trim().toLowerCase();
 export function publisherNames(row) {
- return [...new Set([...(row.organization_publisher_named_in_deal_suit || []), ...(row.affected_publications || [])].filter(Boolean))];
+ return [...new Set([...(row.organization_publisher_named_in_deal_suit || []), ...(row.publishers || []), ...(row.affected_publications || [])].filter(Boolean))];
 }
 
 // Join ownership lineages across all records; never infer ownership from co-participation.

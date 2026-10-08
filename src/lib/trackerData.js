@@ -59,11 +59,12 @@ export function normalizeData(rawDataArray) {
             
             const interaction = normalizeArray(row?.Interaction);
             const grantees = normalizeArray(row?.Grantees);
+            const publicationsReceivedGrants = normalizeArray(row?.['Publications Received Grants']);
             const affectedPublications = normalizeArray(row?.['Affected Publications']);
             const namedOrganizations = normalizeArray(row?.['News Org(s)']);
             // Grant beneficiaries are explicit participants, not ownership descendants.
             const publishers = interaction.some(value => String(value).toLowerCase() === 'grant')
-                ? [...new Set([...namedOrganizations, ...grantees, ...affectedPublications])]
+                ? [...new Set([...namedOrganizations, ...grantees, ...publicationsReceivedGrants, ...affectedPublications])]
                 : namedOrganizations;
 
             return {
@@ -74,8 +75,11 @@ export function normalizeData(rawDataArray) {
                 publishers,
                 type: normalizeArray(row?.Type),
                 reported_details: row?.['Reported Details'] || '',
-                organization_publisher_named_in_deal_suit: publishers,
+                organization_publisher_named_in_deal_suit: interaction.some(value => String(value).toLowerCase() === 'grant')
+                    ? [...new Set([...namedOrganizations, ...grantees])]
+                    : namedOrganizations,
                 grantees,
+                publications_received_grants: publicationsReceivedGrants,
                 named_organizations: namedOrganizations,
                 affected_publications: affectedPublications,
                 parent_child_matches: Array.isArray(row?.['parent_child_matches']) ? row['parent_child_matches'] : [],
