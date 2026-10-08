@@ -1,13 +1,16 @@
 <script>
  import { isMdlConsolidation } from './mdl.js';
- import { onMount } from 'svelte';
+ import { onMount, untrack } from 'svelte';
  import { formatDate } from './utils.js';
  import { publisherNames as names, normalizeName as normalize, buildOwnershipGraph, ownershipFamily, layoutOwnership, layoutCirclePacking, routeCircleConnection } from './publisherNetwork.js';
- let { row, data, onclose, recordCard } = $props();
+ let { row, data = [], onclose, recordCard, entityName = null, entityPlatform = null } = $props();
+ const componentId = $props.id();
+ const arrowId = `${componentId}-lawsuit-arrow`;
+ const mutedArrowId = `${componentId}-lawsuit-arrow-muted`;
  let selectedRecord = $state(null);
- let selectedOrigin = $state(true);
- let selectedPlatform = $state(null);
- let selectedPublisher = $state(null);
+ let selectedOrigin = $state(untrack(() => !entityName));
+ let selectedPlatform = $state(untrack(() => entityPlatform));
+ let selectedPublisher = $state(untrack(() => entityName && !entityPlatform ? normalize(entityName) : null));
  const panelRecords = $derived(selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => node.key === selectedPublisher)) : selectedPlatform ? entries.filter(entry => entry.companies.includes(selectedPlatform)) : selectedRecord ? [selectedRecord] : []);
  let expanded = $state(false);
  let dialog;
@@ -18,6 +21,41 @@
  let cameraX = $state(0);
  let cameraY = $state(0);
  let panGesture = null;
+ const touches = new Map();
+ let pinchGesture = null;
+ let suppressGraphClick = false;
+ let gestureResetTimer;
+ function beginGesture(event) {
+  if (event.pointerType === 'touch') {
+   touches.set(event.pointerId, {x:event.clientX,y:event.clientY});
+   draggingPlatform = null;
+   if (touches.size === 2) {
+    const [a,b] = [...touches.values()];
+    pinchGesture = {distance:Math.hypot(a.x-b.x,a.y-b.y), zoom:cameraZoom};
+    panGesture = null;
+    suppressGraphClick = true;
+   } else if (touches.size === 1) {
+    panGesture = {startX:event.clientX,startY:event.clientY,x:cameraX,y:cameraY};
+   }
+  } else if (event.button === 0 && !event.target.closest('button, g, .ownership-node, .company-node')) {
+   panGesture = {startX:event.clientX,startY:event.clientY,x:cameraX,y:cameraY};
+   event.preventDefault();
+  }
+ }
+ function handleMapKey(event) {
+  if (event.target !== mapViewport) return;
+  const offsets = {ArrowLeft:[40,0],ArrowRight:[-40,0],ArrowUp:[0,40],ArrowDown:[0,-40]};
+  if (offsets[event.key]) {
+   event.preventDefault();
+   cameraX += offsets[event.key][0]; cameraY += offsets[event.key][1];
+  } else if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomAt(1.12); }
+  else if (event.key === '-') { event.preventDefault(); zoomAt(1/1.12); }
+  else if (event.key === 'Home') { event.preventDefault(); resetCamera(); }
+ }
+ function handleMapClick(event) {
+  if (suppressGraphClick) { event.preventDefault(); event.stopPropagation(); }
+ }
+
  function resetCamera() {
   cameraZoom = 1;
   cameraX = (viewportWidth - graphBounds.width * mapScale) / 2 - graphBounds.left * mapScale;
@@ -35,14 +73,14 @@
   cameraX = viewportWidth / 2 - (node.x + node.r) * mapScale * cameraZoom;
   cameraY = viewportHeight / 2 - (node.y + node.r) * mapScale * cameraZoom;
  }
- const publishers = $derived(names(row));
+ const publishers = $derived(entityPlatform ? data.filter(record => [...(record.platform || []), ...(record.defendant || [])].includes(entityPlatform)).flatMap(names) : names(row));
 
  const namedPublishers = $derived(row.organization_publisher_named_in_deal_suit?.length ? row.organization_publisher_named_in_deal_suit : publishers);
- const networkTitle = $derived(namedPublishers.length === 1 ? namedPublishers[0] : namedPublishers.slice(0, 3).join(', ') + (namedPublishers.length > 3 ? ` + ${namedPublishers.length - 3} more` : ''));
+ const networkTitle = $derived(entityName || (namedPublishers.length === 1 ? namedPublishers[0] : namedPublishers.slice(0, 3).join(', ') + (namedPublishers.length > 3 ? ` + ${namedPublishers.length - 3} more` : '')));
  const recordContext = $derived(`${(row.interaction || []).join(' / ')} · ${(row.platform?.length ? row.platform : row.defendant || []).join(', ')} · ${formatDate(row.date)}`);
  const ownership = $derived(buildOwnershipGraph(data));
  const family = $derived(new Set(publishers.flatMap(name => [...ownershipFamily(ownership, name)])));
- const relevantRecordIds = $derived(new Set(data.filter(record => !isMdlConsolidation(record) && names(record).some(name => family.has(normalize(name)))).map(record => record.id)));
+ const relevantRecordIds = $derived(new Set(data.filter(record => !isMdlConsolidation(record) && (!entityPlatform || [...(record.platform || []), ...(record.defendant || [])].includes(entityPlatform)) && names(record).some(name => family.has(normalize(name)))).map(record => record.id)));
  const hierarchy = $derived(layoutOwnership(ownership, family));
  const ownershipLinks = $derived.by(() => {
   const keys = new Set(hierarchy.nodes.map(node => node.key));
@@ -53,7 +91,7 @@
  let draggingPlatform = null;
  let suppressPlatformClick = false;
  function startPlatformDrag(event, company) {
-  if (event.button !== 0) return;
+  if (event.button !== 0 || event.pointerType === 'touch') return;
   const node = platformNodes.get(company);
   draggingPlatform = {company, startX:event.clientX, startY:event.clientY, x:node.x, y:node.y, moved:false};
  }
@@ -65,7 +103,7 @@
  const visibleLabels = $derived.by(() => {
   const scale = mapScale * cameraZoom;
   const candidates = graphNodes.filter(node => !node.key.startsWith('platform:')).sort((a,b) => {
-   const priority = node => node.key === hoveredPublisher ? 3 : node.depth === 0 || node.width*scale >= 130 ? 2 : 1;
+   const priority = node => node.key === hoveredPublisher ? 4 : node.key === selectedPublisher ? 3 : node.depth === 0 || node.width*scale >= 130 ? 2 : 1;
    return priority(b)-priority(a) || b.r-a.r || a.key.localeCompare(b.key);
   });
   const labels = [], boxes = [];
@@ -88,7 +126,7 @@
  const nodeByName = $derived(new Map(displayNodes.map(node => [node.key,node])));
  let hoveredConnection = $state(null);
  let selectedConnection = $state(null);
- function selectConnection(connection) { selectedOrigin = false; selectedPublisher = null; selectedPlatform = null; selectedConnection = connection; selectedRecord = connection.entry; }
+ function selectConnection(connection) { if (suppressGraphClick) return; selectedOrigin = false; selectedPublisher = null; selectedPlatform = null; selectedConnection = connection; selectedRecord = connection.entry; }
  function clearSelection() { selectedOrigin = false; selectedRecord = null; selectedPublisher = null; selectedPlatform = null; selectedConnection = null; hoveredConnection = null; hoveredPublisher = null; hoveredPlatform = null; }
  let hoveredPublisher = $state(null);
  let hoveredPlatform = $state(null);
@@ -189,7 +227,17 @@
   dialog.showModal();
   const initialFitFrame = requestAnimationFrame(resetCamera);
   const movePlatform = event => {
+   if (touches.has(event.pointerId)) {
+    touches.set(event.pointerId,{x:event.clientX,y:event.clientY});
+    if (pinchGesture && touches.size === 2) {
+     const [a,b] = [...touches.values()],bounds=mapViewport.getBoundingClientRect();
+     const distance=Math.hypot(a.x-b.x,a.y-b.y);
+     if (pinchGesture.distance > 0) zoomAt((pinchGesture.zoom * distance / pinchGesture.distance) / cameraZoom,(a.x+b.x)/2-bounds.left,(a.y+b.y)/2-bounds.top);
+     return;
+    }
+   }
    if (panGesture) {
+    if (Math.hypot(event.clientX-panGesture.startX,event.clientY-panGesture.startY)>6) suppressGraphClick = true;
     cameraX = panGesture.x + event.clientX - panGesture.startX;
     cameraY = panGesture.y + event.clientY - panGesture.startY;
     return;
@@ -201,8 +249,17 @@
    platformPositions = new Map(platformPositions).set(draggingPlatform.company, {x:draggingPlatform.x+dx/(mapScale*cameraZoom),y:draggingPlatform.y+dy/(mapScale*cameraZoom)});
   };
   let clickResetTimer;
-  const stopDragging = () => {
-   panGesture = null;
+  const stopDragging = event => {
+   touches.delete(event.pointerId);
+   pinchGesture = null;
+   clearTimeout(gestureResetTimer);
+   if (touches.size === 1) {
+    const [remaining]=touches.values();
+    panGesture={startX:remaining.x,startY:remaining.y,x:cameraX,y:cameraY};
+   } else {
+    panGesture = null;
+    gestureResetTimer=setTimeout(() => suppressGraphClick=false,0);
+   }
    suppressPlatformClick = Boolean(draggingPlatform?.moved);
    draggingPlatform = null;
    clearTimeout(clickResetTimer);
@@ -210,6 +267,7 @@
   };
   window.addEventListener('pointermove', movePlatform);
   window.addEventListener('pointerup', stopDragging);
+  window.addEventListener('pointercancel', stopDragging);
 
   let fitFrame = 0;
   const observer = new ResizeObserver(() => {
@@ -224,46 +282,49 @@
    cancelAnimationFrame(initialFitFrame);
    cancelAnimationFrame(fitFrame);
    clearTimeout(clickResetTimer);
+   clearTimeout(gestureResetTimer);
+   touches.clear();
    observer.disconnect();
    window.removeEventListener('pointermove', movePlatform);
    window.removeEventListener('pointerup', stopDragging);
+   window.removeEventListener('pointercancel', stopDragging);
    dialog.close();
   };
  });
 </script>
 
-<dialog class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
- <header><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}</h2><p class="record-context">{recordContext}</p></div><div class="window-controls"><button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
+<dialog class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (!suppressGraphClick && event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
+ <header><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}</h2>{#if !entityName}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls"><button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
  <div class="legend"><span class="interaction-tag lawsuit">Lawsuit</span><span class="interaction-tag deal">Deal</span><span class="interaction-tag grant">Grant</span></div>
 
  <div class="network-content" class:has-selection={panelRecords.length > 0}>
- <div class="scroll" bind:this={mapViewport} onwheel={event => { event.preventDefault(); const bounds = mapViewport.getBoundingClientRect(); zoomAt(event.deltaY < 0 ? 1.12 : 1/1.12, event.clientX-bounds.left, event.clientY-bounds.top); }} onpointerdown={event => { if (event.button === 0 && !event.target.closest('button, g, .ownership-node, .company-node')) { panGesture = {startX:event.clientX,startY:event.clientY,x:cameraX,y:cameraY}; event.preventDefault(); } }}><div class="scaled-area" style:width="{graphWidth * mapScale}px" style:height="{height * mapScale}px"><div class="map" style:width="{graphWidth}px" style:height="{height}px" style:transform="translate({cameraX}px, {cameraY}px) scale({mapScale * cameraZoom})">
+ <div class="scroll" role="application" tabindex="0" aria-label="Relationship graph. Drag to pan, pinch to zoom. Keyboard: arrows to pan, plus or minus to zoom, Home to fit." onkeydown={handleMapKey} bind:this={mapViewport} onwheel={event => { event.preventDefault(); const bounds = mapViewport.getBoundingClientRect(); zoomAt(event.deltaY < 0 ? 1.12 : 1/1.12, event.clientX-bounds.left, event.clientY-bounds.top); }} onpointerdown={beginGesture} onclickcapture={handleMapClick}><div class="scaled-area" style:width="{graphWidth * mapScale}px" style:height="{height * mapScale}px"><div class="map" style:width="{graphWidth}px" style:height="{height}px" style:transform="translate({cameraX}px, {cameraY}px) scale({mapScale * cameraZoom})">
  
  <svg width={graphWidth} {height} aria-label="Publisher connections">
   <defs>
-   <marker id="lawsuit-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+   <marker id={arrowId} viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
     <path d="M 0 0 L 10 5 L 0 10 Z" fill="#b4232d" />
    </marker>
-   <marker id="lawsuit-arrow-muted" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+   <marker id={mutedArrowId} viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
     <path d="M 0 0 L 10 5 L 0 10 Z" fill="#f4dee0" />
    </marker>
   </defs>
   {#each drawnConnections as connection}
-   <g role="button" tabindex="0" aria-label={`${connection.node.name} — ${connection.entry.interaction.join(' / ')} — ${connection.company}, ${formatDate(connection.entry.date)}`} onpointerenter={() => hoveredConnection = connection} onpointerleave={() => hoveredConnection = null} onfocus={() => hoveredConnection = connection} onblur={() => hoveredConnection = null} onclick={() => selectConnection(connection)} onkeydown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectConnection(connection); } }}>
+   <g role="button" tabindex="0" aria-label={`${connection.node.name} — ${connection.entry.interaction.join(' / ')} — ${connection.company}, ${formatDate(connection.entry.date)}`} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredConnection = connection; }} onpointerleave={() => hoveredConnection = null} onfocus={() => hoveredConnection = connection} onblur={() => hoveredConnection = null} onclick={() => selectConnection(connection)} onkeydown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectConnection(connection); } }}>
     <path class="hit-area" d={curve(connection)} />
-    <path marker-end={kind(connection.entry) === 'lawsuit' ? `url(#${highlighting && !activeConnection(connection.entry, connection.node, connection.company) ? 'lawsuit-arrow-muted' : 'lawsuit-arrow'})` : undefined} class={kind(connection.entry)} class:highlighted={activeConnection(connection.entry, connection.node, connection.company)} class:muted={highlighting && !activeConnection(connection.entry, connection.node, connection.company)} d={curve(connection)} />
+    <path marker-end={kind(connection.entry) === 'lawsuit' ? `url(#${highlighting && !activeConnection(connection.entry, connection.node, connection.company) ? mutedArrowId : arrowId})` : undefined} class={kind(connection.entry)} class:highlighted={activeConnection(connection.entry, connection.node, connection.company)} class:muted={highlighting && !activeConnection(connection.entry, connection.node, connection.company)} d={curve(connection)} />
    </g>
   {/each}
  </svg>
  {#each displayNodes as node (node.key)}
-  <div onpointerenter={() => hoveredPublisher = node.key} onpointerleave={() => { hoveredPublisher = null; }} class="ownership-node" class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:connected-node={highlighting && highlightedPublishers.has(node.key)} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-label={node.name} ondblclick={() => focusCamera(node)} onclick={() => { clearSelection(); selectedPublisher = node.key; }} onfocus={() => hoveredPublisher = node.key} onblur={() => hoveredPublisher = null} >{node.name}</button></div>
+  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { hoveredPublisher = null; }} class="ownership-node" class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:connected-node={highlighting && highlightedPublishers.has(node.key)} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-label={node.name} ondblclick={() => focusCamera(node)} onclick={() => { if (suppressGraphClick) return; clearSelection(); selectedPublisher = node.key; }} onfocus={() => hoveredPublisher = node.key} onblur={() => hoveredPublisher = null} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
   <div class="floating-node-label" class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}</div>
  {/each}
- {#each companies as company (company)}<div class="company-node" class:muted-node={highlighting && !highlightedCompanies.has(company)} class:connected-node={highlighting && highlightedCompanies.has(company)} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><button class="platform-name" aria-label={company} ondblclick={() => focusCamera(platformNodes.get(company))} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick) return; clearSelection(); selectedPlatform = company; }} onpointerenter={() => hoveredPlatform = company} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
+ {#each companies as company (company)}<div class="company-node" class:muted-node={highlighting && !highlightedCompanies.has(company)} class:connected-node={highlighting && highlightedCompanies.has(company)} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><button class="platform-name" aria-label={company} ondblclick={() => focusCamera(platformNodes.get(company))} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick || suppressGraphClick) return; clearSelection(); selectedPlatform = company; }} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPlatform = company; }} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
  {#each companies as company (company)}
   {@const platform = platformNodes.get(company)}
   <div class="floating-node-label platform-label" class:muted-label={highlighting && !highlightedCompanies.has(company)} style:left="{platform.x + platform.r}px" style:top="{platform.y + platform.r}px" style:font-size="{14 / (mapScale * cameraZoom)}px" style:width="{180 / (mapScale * cameraZoom)}px">{company}</div>
@@ -288,8 +349,8 @@
  h2 { margin:0; font-size:1.4rem; line-height:1.25; font-weight:650; }
  .record-context { margin:.4rem 0 0; font-size:.8rem; color:#555; }
  .window-controls { display:flex; align-items:center; gap:.75rem; flex-shrink:0; }
- .resize { font:inherit; font-size:.75rem; border:1px solid #ddd; background:#fff; color:#254c6f; padding:.25rem .6rem; cursor:pointer; }
- .close { border:0; background:none; font-size:1.2rem; cursor:pointer; }
+ .resize { min-height:36px; font:inherit; font-size:.75rem; border:1px solid #ddd; background:#fff; color:#254c6f; padding:.25rem .6rem; cursor:pointer; }
+ .close { min-width:40px; min-height:40px; border:0; background:none; font-size:1.2rem; cursor:pointer; }
  .legend { display:flex; gap:.4rem; margin-bottom:.65rem; }
  .interaction-tag { padding:.2rem .5rem; border-radius:3px; font-size:.65rem; text-transform:uppercase; letter-spacing:.5px; }
  .interaction-tag.lawsuit { background:#f5c2c2; color:#8b1a1a; }
@@ -336,5 +397,20 @@
  .selected-record :global(.month-group) { gap:1rem; }
  .selected-record :global(.timeline-row) { display:block; margin:0; padding:0; }
  .selected-record :global(.month-label),.selected-record :global(.timeline-divider) { display:none; }
- @media(max-width:700px) { .network-content.has-selection { grid-template-columns:minmax(0,1fr); } dialog { padding:1rem; } }
+ @media(max-width:700px) {
+  dialog,dialog.expanded { width:100%; height:100dvh; max-height:100dvh; max-width:none; margin:0; padding:1rem; overflow-y:auto; overscroll-behavior:contain; }
+  header { gap:.5rem; }
+  h2 { font-size:1.1rem; overflow-wrap:anywhere; }
+  .window-controls { gap:.25rem; }
+  .resize,.close { min-height:44px; }
+  .legend { flex-wrap:wrap; }
+  .network-content.has-selection { grid-template-columns:minmax(0,1fr); }
+  .scroll,dialog.expanded .scroll { height:60dvh; min-height:240px; }
+  .network-content.has-selection .scroll { height:45dvh; }
+  .selected-record,dialog.expanded .selected-record { max-height:none; overflow:visible; }
+  .selected-record :global(.card-header) { flex-wrap:wrap; }
+  .selected-record :global(.header-content) { min-width:0; overflow-wrap:anywhere; }
+  path.hit-area { stroke-width:20; }
+ }
+
 </style>

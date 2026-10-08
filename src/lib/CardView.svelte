@@ -5,12 +5,20 @@
 	import PublisherNetwork from './PublisherNetwork.svelte';
 	import CardView from './CardView.svelte';
 	let networkRow = $state(null);
+ let networkEntity = $state(null);
+ function openEntityNetwork(event, name, type) {
+  event.stopPropagation();
+  networkEntity = {name,type};
+  networkRow = {id:`${type}:${name}`, organization_publisher_named_in_deal_suit:type === 'publisher' ? [name] : [], affected_publications:[], interaction:[], platform:[]};
+ }
 	import { parseArray, formatDate, buildCountryIndex, getPlacesForName, getRowLocations } from './utils.js';
 
 	/**
 	 * @typedef {Object} Props
 	 * @property {Array<number|string>|null} [focusedRecordIds=null] - Records to display collapsed in the network panel
 	 * @property {number|string|null} [focusedRecordId=null] - Record to display in the detail dialog
+	 * @property {boolean} [showEntityNetworks=false] - Show organization network icons in expanded cards
+	 * @property {boolean} [showNetworks=true] - Show per-record network buttons
 	 * @property {Array<Object>} [data=[]] - Card data rows
 	 * @property {string} [searchQuery=''] - Search query string
 	 * @property {string[]} [filterInteraction=[]] - Filter by interactions
@@ -26,6 +34,8 @@
 	/** @type {Props} */
 	let {
 		data = [],
+		showNetworks = true,
+		showEntityNetworks = false,
 		focusedRecordId = null,
 		focusedRecordIds = null,
 		searchQuery = '',
@@ -1212,8 +1222,20 @@
 	}
 </script>
 
+{#snippet entityNetworkIcon(rowId, name, type)}
+ {#if showEntityNetworks && isCardExpanded(rowId)}
+  <button class="entity-network-icon" aria-label={`View ${name} network`} title={`View ${name} network`} onclick={event => openEntityNetwork(event,name,type)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+   <path d="M12 8V5M12 16v3M8.5 10l-3-1.7M15.5 10l3-1.7M8.5 14l-3 1.7M15.5 14l3 1.7" />
+   <circle cx="12" cy="12" r="4" />
+   <circle cx="12" cy="3" r="2" /><circle cx="12" cy="21" r="2" />
+   <circle cx="4" cy="7.5" r="2" /><circle cx="20" cy="7.5" r="2" />
+   <circle cx="4" cy="16.5" r="2" /><circle cx="20" cy="16.5" r="2" />
+  </svg></button>
+ {/if}
+{/snippet}
+
 {#if networkRow}
- <PublisherNetwork row={networkRow} {data} onclose={() => networkRow = null}>
+ <PublisherNetwork row={networkRow} {data} entityName={networkEntity?.name} entityPlatform={networkEntity?.type === 'platform' ? networkEntity.name : null} onclose={() => { networkRow = null; networkEntity = null; }}>
   {#snippet recordCard(selectedEntries, expandRecord)}
    {#key selectedEntries.map(entry => entry.id).join(',') + expandRecord}
     <CardView {data} focusedRecordId={expandRecord ? selectedEntries[0]?.id : null} focusedRecordIds={expandRecord ? null : selectedEntries.map(entry => entry.id)} {showCountries} />
@@ -1322,7 +1344,8 @@
 											<div class="header-left">
 												{#if Array.isArray(row.defendant) && row.defendant.length > 0}
 													{#each row.defendant as defendant}
-														<div class="header-item">{@html highlightText(defendant)}</div>
+														<div class="header-item">{@html highlightText(defendant)}
+{@render entityNetworkIcon(row.id, defendant, 'platform')}</div>
 													{/each}
 												{/if}
 											</div>
@@ -1330,7 +1353,8 @@
 											<div class="header-right-content">
 												{#if Array.isArray(row.plaintiff) && row.plaintiff.length > 0}
 													{#each row.plaintiff as plaintiff}
-														<div class="header-item">{@html highlightText(plaintiff)}</div>
+														<div class="header-item">{@html highlightText(plaintiff)}
+{@render entityNetworkIcon(row.id, plaintiff, 'publisher')}</div>
 													{/each}
 												{/if}
 											</div>
@@ -1338,7 +1362,8 @@
 											<div class="header-left">
 												{#if Array.isArray(row.platform) && row.platform.length > 0}
 													{#each row.platform as platform}
-														<div class="header-item">{@html highlightText(platform)}</div>
+														<div class="header-item">{@html highlightText(platform)}
+{@render entityNetworkIcon(row.id, platform, 'platform')}</div>
 													{/each}
 												{/if}
 											</div>
@@ -1346,7 +1371,8 @@
 											<div class="header-right-content">
 												{#if Array.isArray(allPublishers) && allPublishers.length > 0}
 													{#each allPublishers as pub}
-														<div class="header-item">{@html highlightText(pub)}</div>
+														<div class="header-item">{@html highlightText(pub)}
+{@render entityNetworkIcon(row.id, pub, 'publisher')}</div>
 													{/each}
 												{/if}
 											</div>
@@ -1375,11 +1401,13 @@
 						<div class="field-value">
 							{#if interactionType === 'lawsuit' && Array.isArray(entry.defendant) && entry.defendant.length > 0}
 								{#each entry.defendant as defendant}
-									<div class="field-item">{@html highlightText(defendant)}</div>
+									<div class="field-item">{@html highlightText(defendant)}
+{@render entityNetworkIcon(row.id, defendant, 'platform')}</div>
 								{/each}
 							{:else if Array.isArray(entry.platform) && entry.platform.length > 0}
 								{#each entry.platform as platform}
-									<div class="field-item">{@html highlightText(platform)}</div>
+									<div class="field-item">{@html highlightText(platform)}
+{@render entityNetworkIcon(row.id, platform, 'platform')}</div>
 								{/each}
 					{/if}
 								</div>
@@ -1397,6 +1425,7 @@
 								<div class="publisher-item">
 									<div class="field-item">
 										{@html highlightText(org)}
+{@render entityNetworkIcon(row.id, org, 'publisher')}
 										{@render countryFlags(entry, org)}
 									</div>
 									{#if hasMatches}
@@ -1414,6 +1443,7 @@
 																		<span class="hierarchy-label">Grantee: </span>
 																	{/if}
 																	{@html highlightText(publication)}
+
 																	{@render countryFlags(entry, publication)}
 																</div>
 							{/if}
@@ -1425,6 +1455,7 @@
 																	<span class="hierarchy-label">Grant Administrator: </span>
 																{/if}
 																{@html highlightText(key)}
+
 																{@render countryFlags(entry, key)}
 															</span>
 															<div class="hierarchy-intermediate-children">
@@ -1573,9 +1604,9 @@
 					</div>
 				{/if}
 								
-                                {#if networkAvailability.get(row.id)}
+                                {#if showNetworks && networkAvailability.get(row.id)}
                                     <div class="related-cards-toggle">
-                                        <button class="related-toggle-btn publisher-network-btn" onclick={(event) => { event.stopPropagation(); networkRow = row; }}>
+                                        <button class="related-toggle-btn publisher-network-btn" onclick={(event) => { event.stopPropagation(); networkEntity = null; networkRow = row; }}>
                                             <img class="network-icon" src={`${base}/publisher-network-icon.png`} alt="" aria-hidden="true" />
                                             <span class="network-button-copy"><strong>Related Relationships</strong></span>
                                         </button>
@@ -1599,6 +1630,12 @@
 </div>
 
 <style>
+ .entity-network-icon { display:inline-flex; vertical-align:middle; align-items:center; justify-content:center; width:26px; height:26px; padding:4px; margin-left:6px; border:0; background:transparent; cursor:pointer; }
+ .entity-network-icon { color:#8a949d; transition:color .15s ease; }
+ .entity-network-icon svg { width:16px; height:16px; flex-shrink:0; }
+ .entity-network-icon:hover { color:#254c6f; }
+ .entity-network-icon:focus-visible { outline:2px solid #254c6f; outline-offset:2px; }
+
 	.card-view {
 		width: 100%;
 		margin-top: 1rem;
