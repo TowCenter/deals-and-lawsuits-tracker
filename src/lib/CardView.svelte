@@ -1246,7 +1246,7 @@
  <PublisherNetwork row={networkRow} {data} entityName={networkEntity?.name} entityPlatform={networkEntity?.type === 'platform' ? networkEntity.name : null} onclose={() => { networkRow = null; networkEntity = null; }}>
   {#snippet recordCard(selectedEntries, expandRecord)}
    {#key selectedEntries.map(entry => entry.id).join(',') + expandRecord}
-    <CardView {data} showNetworks={false} showEntityNetworks={false} focusedRecordId={expandRecord ? selectedEntries[0]?.id : null} focusedRecordIds={expandRecord ? null : selectedEntries.map(entry => entry.id)} {showCountries} />
+    <CardView {data} showNetworks={false} showEntityNetworks={false} focusedRecordId={expandRecord && selectedEntries.length === 1 ? selectedEntries[0]?.id : null} focusedRecordIds={selectedEntries.map(entry => entry.id)} {showCountries} />
    {/key}
   {/snippet}
  </PublisherNetwork>

@@ -3,7 +3,7 @@ import { platformConnectionNames } from './entityNetwork.js';
 import { normalizeName } from './publisherNetwork.js';
 import { vennOwnershipFamilies } from './vennOwnership.js';
 
-export function layoutVennNetwork(focus, entries, ownership) {
+export function layoutVennNetwork(focus, entries, ownership, filter = null) {
  const entities = new Map();
  for (const entry of entries) {
   const names = focus.type === 'platform' ? platformConnectionNames(entry,ownership) : entry.companies;
@@ -16,8 +16,15 @@ export function layoutVennNetwork(focus, entries, ownership) {
    }
   }
  }
+ if (filter) for (const [key,entity] of entities) if (!entity.types.has(filter)) entities.delete(key);
  const counts = Object.fromEntries(['lawsuit','deal','grant'].map(type=>[type,[...entities.values()].filter(entity=>entity.types.has(type)).length]));
- const trees = focus.type === 'platform' ? vennOwnershipFamilies(entities,ownership) : [...entities.values()];
+ const prune = tree => {
+  const children=(tree.children || []).map(prune).filter(Boolean);
+  if (!tree.ownTypes?.has(filter) && !children.length) return null;
+  return {...tree,children:children.length ? children : undefined};
+ };
+ const families = focus.type === 'platform' ? vennOwnershipFamilies(entities,ownership) : [...entities.values()];
+ const trees = filter && focus.type === 'platform' ? families.map(prune).filter(Boolean) : families;
  const groups = new Map();
  for (const tree of trees) {
   const key = [...tree.types].sort().join('|');
@@ -26,13 +33,13 @@ export function layoutVennNetwork(focus, entries, ownership) {
   groups.get(key).push(tree);
  }
  const nodes = [], jobs = [];
- function prepare(items,cx,cy,size) {
+ function prepare(items,cx,cy) {
   const root = hierarchy({children:items}).sum(node=>node.children ? 0 : 1);
   pack().radius(()=>40).padding(12)(root);
-  jobs.push({root,cx,cy,size});
+  jobs.push({root,cx,cy});
  }
  // Equal leaf radii; ownership containers grow recursively to hold their children.
- for (const [key,items] of groups) prepare(items,0,0,0);
+ for (const items of groups.values()) prepare(items,0,0);
  const ordered = [...groups.keys()];
  const gap = 28;
  const largest = Math.max(60,...jobs.map(job=>job.root.r));
@@ -54,7 +61,7 @@ export function layoutVennNetwork(focus, entries, ownership) {
    a.cx-=ux*shift; a.cy-=uy*shift; b.cx+=ux*shift; b.cy+=uy*shift;
   }
  }
- const styles = {lawsuit:{label:'Lawsuits',color:'#b4232d',fill:'#fbe9e9'},deal:{label:'Deals',color:'#21823b',fill:'#e8f3e9'},grant:{label:'Grants',color:'#1565c0',fill:'#e5effb'}};
+ const styles = {lawsuit:{label:'Lawsuits',color:'#b4232d'},deal:{label:'Deals',color:'#21823b'},grant:{label:'Grants',color:'#1565c0'}};
  const circles = Object.keys(styles).filter(type=>counts[type]).map(type=>{
   const members=jobs.filter((job,index)=>ordered[index].split('|').includes(type));
   const weight=members.reduce((sum,job)=>sum+job.root.r**2,0);
@@ -67,7 +74,7 @@ export function layoutVennNetwork(focus, entries, ownership) {
  const centerY=circles.length ? (Math.min(...circles.map(circle=>circle.y-circle.r))+Math.max(...circles.map(circle=>circle.y+circle.r)))/2 : 0;
  if (focus.type === 'publisher') {
   const family=vennOwnershipFamilies(new Map([[normalizeName(focus.name),{name:focus.name,types:new Set()}]]),ownership);
-  prepare(family,0,centerY,0);
+  prepare(family,0,centerY);
   jobs[jobs.length-1].cx=right+100+jobs[jobs.length-1].root.r;
  } else nodes.push({key:`platform:${focus.name}`,name:focus.name,x:right+100,y:centerY-76,r:76,width:152,height:152,depth:0,hasChildren:false});
  for (const {root,cx,cy} of jobs) {
