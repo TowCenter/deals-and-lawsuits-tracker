@@ -595,8 +595,10 @@
    </button>
   {/each}
   </div>
-  {#if inheritedAncestorKeys.size}<span class="inheritance-key">Dashed = inherited from parent</span>{/if}
  </div>
+ {#if !showVenn}
+  <div class="inheritance-key" style:visibility={inheritedAncestorKeys.size ? 'visible' : 'hidden'}>Dashed = inherited from parent</div>
+ {/if}
  {#if displayNodes.some(node => node.hasChildren)}
   <div class="ownership-legend">
    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14"/><circle cx="11" cy="18" r="5"/><circle cx="22" cy="18" r="4"/></svg>
@@ -647,7 +649,7 @@
  .fit-view:hover { background:#f0f5f9; border-color:#8da6bb; }
  .fit-view:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
  .legend-hint,.inheritance-key {font-size:.8rem;color:#666;line-height:1.4;}
- .inheritance-key {margin-left:.5rem;}
+ .inheritance-key { text-align:center; margin:.5rem 0 .25rem; }
  .interaction-tag { display:inline-flex;align-items:center;justify-content:center;min-height:36px; font-family:inherit; font-weight:500; border:1px solid transparent; cursor:pointer; padding:.35rem .85rem; border-radius:6px; font-size:.8rem; line-height:1.25; text-transform:none; letter-spacing:normal; }
  .interaction-tag:hover:not(:disabled) {border-color:currentColor;}
  .interaction-tag:disabled { opacity:.35; cursor:default; }
