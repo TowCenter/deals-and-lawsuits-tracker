@@ -2,7 +2,7 @@
  import { isMdlConsolidation } from './mdl.js';
  import { onMount, untrack } from 'svelte';
  import { formatDate } from './utils.js';
- import { publisherNames as names, normalizeName as normalize, buildOwnershipGraph, ownershipFamily, publisherAndAncestors, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
+ import { publisherNames as names, connectionPublisherNames, normalizeName as normalize, buildOwnershipGraph, ownershipFamily, publisherAndAncestors, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
  let { row, data = [], onclose, recordCard, entityName = null, entityPlatform = null } = $props();
  const componentId = $props.id();
  const arrowId = `${componentId}-lawsuit-arrow`;
@@ -172,7 +172,7 @@
  const connectionNodeIndex = $derived.by(() => {
   const index = new Map();
   for (const entry of entries) {
-   const keys = new Set((entry.organization_publisher_named_in_deal_suit || []).map(normalize));
+   const keys = new Set(connectionPublisherNames(entry).map(normalize));
    index.set(entry.id, [...keys].map(key => nodeByName.get(key)).filter(Boolean));
   }
   return index;
@@ -196,7 +196,7 @@
   return [...groups.values()].sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')));
  });
  const companies = $derived([...new Set(entries
-  .filter(entry => (entry.organization_publisher_named_in_deal_suit || []).some(name => family.has(normalize(name))))
+  .filter(entry => connectionPublisherNames(entry).some(name => family.has(normalize(name))))
   .flatMap(entry => entry.companies))]);
  const height = $derived(Math.max(650, Math.sqrt(hierarchy.nodes.length + companies.length) * 130));
  const platformRadius = $derived(Math.max(80, ...companies.map(name => name.length * 13 * .58 / 1.8 + 14)));

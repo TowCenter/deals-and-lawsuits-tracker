@@ -1,8 +1,16 @@
 import { hierarchy, pack } from 'd3-hierarchy';
 
 export const normalizeName = name => String(name || '').trim().toLowerCase();
+// Grant coverage is a platform relationship, independent of ownership or card grouping.
+export function connectionPublisherNames(row) {
+ const names = [...(row.organization_publisher_named_in_deal_suit || [])];
+ if ((row.interaction || []).some(kind => String(kind).toLowerCase() === 'grant')) {
+  names.push(...(row.grantees || []), ...(row.publications_received_grants || []), ...(row.affected_publications || []));
+ }
+ return [...new Map(names.filter(Boolean).map(name => [normalizeName(name), name])).values()];
+}
 export function publisherNames(row) {
- return [...new Set([...(row.organization_publisher_named_in_deal_suit || []), ...(row.publishers || []), ...(row.affected_publications || [])].filter(Boolean))];
+ return [...new Set([...connectionPublisherNames(row), ...(row.publishers || []), ...(row.affected_publications || [])].filter(Boolean))];
 }
 
 // Join ownership lineages across all records; never infer ownership from co-participation.

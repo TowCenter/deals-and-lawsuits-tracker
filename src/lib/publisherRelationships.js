@@ -1,4 +1,4 @@
-import { buildOwnershipGraph, normalizeName, publisherAndAncestors } from './publisherNetwork.js';
+import { buildOwnershipGraph, connectionPublisherNames, normalizeName, publisherAndAncestors } from './publisherNetwork.js';
 import { isMdlConsolidation } from './mdl.js';
 import { parseArray } from './utils.js';
 
@@ -20,7 +20,7 @@ export function createPublisherRelationshipIndex(data) {
  const caseIds = record => new Set([...parseArray(record?.lawsuit_ids), ...parseArray(record?.lawsuit_id)]);
  for (const record of data) {
   if (isMdlConsolidation(record) || ![...parseArray(record.platform), ...parseArray(record.defendant)].length) continue;
-  for (const name of record.organization_publisher_named_in_deal_suit || []) {
+  for (const name of connectionPublisherNames(record)) {
    const key = normalizeName(name);
    if (!recordsByPublisher.has(key)) recordsByPublisher.set(key, new Set());
    recordsByPublisher.get(key).add(record);
@@ -28,7 +28,7 @@ export function createPublisherRelationshipIndex(data) {
  }
  const index = {
   source: id => sources.get(id),
-  includes: (record, name) => (record.organization_publisher_named_in_deal_suit || []).some(publisher => ancestors(name).has(normalizeName(publisher))),
+  includes: (record, name) => (connectionPublisherNames(record)).some(publisher => ancestors(name).has(normalizeName(publisher))),
   other(rowId, name) {
    if (!queryCache.has(rowId)) queryCache.set(rowId, new Map());
    const queries = queryCache.get(rowId), key = normalizeName(name);

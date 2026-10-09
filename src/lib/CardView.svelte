@@ -1390,6 +1390,12 @@
 								</div>
 									{/if}
 									<div class="header-right">
+										{#if !isCardExpanded(row.id) && interactionTypes.includes('lawsuit') && entry.status}
+											<span class="status-badge header-status {getStatusClass(entry.status)}" aria-label="Status: {entry.status}">
+												<span class="status-indicator"></span>
+												<span class="status-text">{@html highlightText(entry.status)}</span>
+											</span>
+										{/if}
 										<div class="interaction-tags">
 											{#each interactionTypes as interaction}
 												<span class="interaction-tag {interaction}">
@@ -2179,6 +2185,7 @@
 
 	.header-right {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 1rem;
 		flex-shrink: 0;
@@ -2655,6 +2662,14 @@
 		height: 8px;
 		border-radius: 50%;
 		flex-shrink: 0;
+	}
+
+	.status-badge.header-status {
+		font-size: 0.75rem;
+		letter-spacing: 0;
+		max-width: 100%;
+		box-sizing: border-box;
+		overflow-wrap: anywhere;
 	}
 
 	/* One colour per status, shared by the single-status badge and the dots of a

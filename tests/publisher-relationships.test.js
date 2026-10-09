@@ -1,4 +1,4 @@
-import {buildOwnershipGraph} from '../src/lib/publisherNetwork.js';
+import {buildOwnershipGraph, connectionPublisherNames} from '../src/lib/publisherNetwork.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPublisherRelationshipIndex, buildRelationshipPreview, grantChildPublishers } from '../src/lib/publisherRelationships.js';
@@ -52,7 +52,7 @@ test('grant recipients combine grantees and affected publications without creati
  assert.deepEqual(grant.parent_child_matches, []);
  assert.deepEqual(deal.organization_publisher_named_in_deal_suit, ['Owner']);
  const index = createPublisherRelationshipIndex([grant]);
- assert(!index.includes(grant, 'Newsroom B'));
+ assert(index.includes(grant, 'Newsroom B'));
 });
 
 test('grant child expansion includes recorded descendants without unrelated grant recipients', () => {
@@ -69,10 +69,20 @@ test('grant normalization preserves direct, downstream and agreement-covered rec
  assert.deepEqual(row.publishers, ['Lenfest','Newsroom A','Newsroom B']);
 });
 
-test('agreement-covered children do not create direct platform connections', () => {
+test('grant-covered children create direct platform connections without changing named parties', () => {
  const rows = normalizeData([{id:1, Interaction:['Grant'], 'AI Company':['OpenAI'], 'News Org(s)':['Craig Newmark'], Grantees:['Craig Newmark'], 'Affected Publications':['Tow-Knight'], parent_child_matches:[{lineage:['Craig Newmark','Tow-Knight']}]}]);
  const index = createPublisherRelationshipIndex(rows);
  assert.deepEqual(rows[0].organization_publisher_named_in_deal_suit, ['Craig Newmark']);
- assert(index.includes(rows[0], 'Tow-Knight')); // inherited through the parent
+ assert.deepEqual(connectionPublisherNames(rows[0]), ['Craig Newmark', 'Tow-Knight']);
+ assert(index.includes(rows[0], 'Tow-Knight'));
  assert.deepEqual(rows[0].affected_publications, ['Tow-Knight']);
+});
+
+test('downstream grant recipients have platform relationships without ownership links', () => {
+ const rows = normalizeData([{id:1, Interaction:['Grant'], Grantees:['Lenfest'], 'Publications Received Grants':['Newsroom'], 'AI Company':['OpenAI']}]);
+ assert.deepEqual(connectionPublisherNames(rows[0]), ['Lenfest', 'Newsroom']);
+ const index = createPublisherRelationshipIndex(rows);
+ assert(index.includes(rows[0], 'Newsroom'));
+ assert.deepEqual(buildRelationshipPreview(index, 1, 'Newsroom').edges.map(edge => edge.platform), ['OpenAI']);
+ assert.deepEqual(rows[0].parent_child_matches, []);
 });
