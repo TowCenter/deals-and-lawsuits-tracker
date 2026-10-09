@@ -91,3 +91,14 @@ test('disjoint relationship circles do not overlap due to label padding',()=>{
  const deal=layout.circles.find(circle=>circle.type==='deal'), grant=layout.circles.find(circle=>circle.type==='grant');
  assert(Math.hypot(deal.x-grant.x,deal.y-grant.y)>=deal.r+grant.r);
 });
+
+test('Venn geometry is stable across record order and cached across filter revisits',()=>{
+ const ownership=buildOwnershipGraph(entries);
+ const focus={type:'platform',name:'OpenAI'};
+ const layout=layoutVennNetwork(focus,entries,ownership);
+ const reordered=layoutVennNetwork(focus,[...entries].reverse(),ownership);
+ const geometry=result=>result.nodes.map(({key,x,y,r})=>({key,x,y,r})).sort((a,b)=>a.key.localeCompare(b.key));
+ assert.deepEqual(geometry(layout),geometry(reordered));
+ layoutVennNetwork(focus,entries,ownership,'grant');
+ assert.equal(layoutVennNetwork(focus,entries,ownership),layout);
+});

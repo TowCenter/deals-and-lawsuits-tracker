@@ -3,7 +3,20 @@ import { platformConnectionNames } from './entityNetwork.js';
 import { normalizeName } from './publisherNetwork.js';
 import { vennOwnershipFamilies } from './vennOwnership.js';
 
+const layoutCache = new WeakMap();
+
+// Dataset and ownership maps are immutable during a network session.
 export function layoutVennNetwork(focus, entries, ownership, filter = null) {
+ let byOwnership=layoutCache.get(entries);
+ if (!byOwnership) {byOwnership=new WeakMap();layoutCache.set(entries,byOwnership);}
+ let views=byOwnership.get(ownership);
+ if (!views) {views=new Map();byOwnership.set(ownership,views);}
+ const key=JSON.stringify([focus.type,normalizeName(focus.name),filter]);
+ if (!views.has(key)) views.set(key,buildVennLayout(focus,entries,ownership,filter));
+ return views.get(key);
+}
+
+function buildVennLayout(focus, entries, ownership, filter) {
  const entities = new Map();
  for (const entry of entries) {
   const names = focus.type === 'platform' ? platformConnectionNames(entry,ownership) : entry.companies;
@@ -21,7 +34,7 @@ export function layoutVennNetwork(focus, entries, ownership, filter = null) {
  // Filter direct participants, then retain their ownership families as context.
  const trees = focus.type === 'platform' ? vennOwnershipFamilies(entities,ownership) : [...entities.values()];
  const groups = new Map();
- for (const tree of trees) {
+ for (const tree of trees.slice().sort((a,b)=>a.key.localeCompare(b.key))) {
   const key = [...tree.types].sort().join('|');
   if (!key) continue;
   if (!groups.has(key)) groups.set(key,[]);
@@ -29,13 +42,13 @@ export function layoutVennNetwork(focus, entries, ownership, filter = null) {
  }
  const nodes = [], jobs = [];
  function prepare(items,cx,cy) {
-  const root = hierarchy({children:items}).sum(node=>node.children ? 0 : 1);
+  const root = hierarchy({children:items}).sum(node=>node.children ? 0 : 1).sort((a,b)=>String(a.data.key || '').localeCompare(String(b.data.key || '')));
   pack().radius(()=>40).padding(12)(root);
   jobs.push({root,cx,cy});
  }
  // Equal leaf radii; ownership containers grow recursively to hold their children.
- for (const items of groups.values()) prepare(items,0,0);
- const ordered = [...groups.keys()];
+ const ordered = [...groups.keys()].sort();
+ for (const key of ordered) prepare(groups.get(key),0,0);
  const gap = 28;
  const radiusFor = type => jobs[ordered.indexOf(type)]?.root.r || 60;
  const lawsuitRadius=radiusFor('lawsuit'), dealRadius=radiusFor('deal'), grantRadius=radiusFor('grant');

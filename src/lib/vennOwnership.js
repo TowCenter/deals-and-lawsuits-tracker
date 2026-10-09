@@ -8,12 +8,12 @@ export function vennOwnershipFamilies(entities, ownership) {
  const build = key => {
   if (visited.has(key)) return null;
   visited.add(key);
-  const descendants = [...(ownership.get(key)?.children || [])].filter(child=>family.has(child)).map(build).filter(Boolean);
+  const descendants = [...(ownership.get(key)?.children || [])].filter(child=>family.has(child)).sort().map(build).filter(Boolean);
   const ownTypes = entities.get(normalizeName(key))?.types || new Set();
   const types = new Set([...ownTypes,...descendants.flatMap(child=>[...child.types])]);
   return {name:ownership.get(key)?.name || key,key,ownTypes,types,children:descendants.length ? descendants : undefined};
  };
- const roots = [...family].filter(key=>!children.has(key)).map(build).filter(Boolean);
- for (const key of family) if (!visited.has(key)) roots.push(build(key));
+ const roots = [...family].filter(key=>!children.has(key)).sort().map(build).filter(Boolean);
+ for (const key of [...family].sort()) if (!visited.has(key)) roots.push(build(key));
  return roots;
 }

@@ -4,7 +4,7 @@
  import { groupNetworkConnections } from './networkConnectionGroups.js';
  import RelationshipOutline from './RelationshipOutline.svelte';
  import { isMdlConsolidation } from './mdl.js';
- import { onMount, untrack } from 'svelte';
+ import { onMount, tick, untrack } from 'svelte';
  import { formatDate } from './utils.js';
  import { publisherNames as names, normalizeName as normalize, ownershipFamily, publisherAndAncestors, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
  let { row, data = [], onclose, recordCard, entityName = null, entityPlatform = null } = $props();
@@ -57,6 +57,7 @@
  let expanded = $state(false);
  let dialog;
  let mapViewport;
+ let graphReady = $state(false);
  let viewportWidth = $state(1100);
  let viewportHeight = $state(460);
  let cameraZoom = $state(1);
@@ -410,7 +411,7 @@
  const kind = entry => kinds(entry).some(v => v.includes('lawsuit')) ? 'lawsuit' : kinds(entry).some(v => v.includes('grant')) ? 'grant' : 'deal';
  onMount(() => {
   dialog.showModal();
-  const initialFitFrame = requestAnimationFrame(resetCamera);
+  let disposed = false;
   const movePlatform = event => {
    if (touches.has(event.pointerId)) {
     touches.set(event.pointerId,{x:event.clientX,y:event.clientY});
@@ -457,14 +458,23 @@
   let fitFrame = 0;
   const observer = new ResizeObserver(() => {
    const width = mapViewport.clientWidth, height = mapViewport.clientHeight;
+   if (width <= 0 || height <= 0) return;
    if (width > 0 && Math.abs(width - viewportWidth) >= 1) viewportWidth = width;
    if (height > 0 && Math.abs(height - viewportHeight) >= 1) viewportHeight = height;
    if (fitFrame) cancelAnimationFrame(fitFrame);
-   fitFrame = requestAnimationFrame(resetCamera);
+   fitFrame = requestAnimationFrame(async () => {
+    // Let measured dimensions update layout before fitting, and commit the
+    // camera transform before revealing the initially hidden graph.
+    await tick();
+    if (disposed) return;
+    resetCamera();
+    await tick();
+    if (!disposed) graphReady = true;
+   });
   });
   observer.observe(mapViewport);
   return () => {
-   cancelAnimationFrame(initialFitFrame);
+   disposed = true;
    cancelAnimationFrame(fitFrame);
    clearTimeout(clickResetTimer);
    clearTimeout(gestureResetTimer);
@@ -490,7 +500,7 @@
  <div class="graph-column">
  <!-- This application surface deliberately handles pan/zoom and implements its documented keyboard controls. -->
  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
- <div class="scroll" role="application" tabindex="0" aria-label="Relationship graph. Drag to pan, pinch to zoom. Keyboard: arrows to pan, plus or minus to zoom, Home to fit." onkeydown={handleMapKey} bind:this={mapViewport} onwheel={event => { event.preventDefault(); const bounds = mapViewport.getBoundingClientRect(); zoomAt(event.deltaY < 0 ? 1.12 : 1/1.12, event.clientX-bounds.left, event.clientY-bounds.top); }} onpointerdown={beginGesture} onclickcapture={handleMapClick}><div class="scaled-area" style:width="{graphWidth * mapScale}px" style:height="{height * mapScale}px"><div class="map" style:width="{graphWidth}px" style:height="{height}px" style:transform="translate({cameraX}px, {cameraY}px) scale({mapScale * cameraZoom})">
+ <div class="scroll" role="application" tabindex="0" aria-label="Relationship graph. Drag to pan, pinch to zoom. Keyboard: arrows to pan, plus or minus to zoom, Home to fit." onkeydown={handleMapKey} bind:this={mapViewport} onwheel={event => { event.preventDefault(); const bounds = mapViewport.getBoundingClientRect(); zoomAt(event.deltaY < 0 ? 1.12 : 1/1.12, event.clientX-bounds.left, event.clientY-bounds.top); }} onpointerdown={beginGesture} onclickcapture={handleMapClick}><div class="scaled-area" style:visibility={graphReady ? 'visible' : 'hidden'} style:width="{graphWidth * mapScale}px" style:height="{height * mapScale}px"><div class="map" style:width="{graphWidth}px" style:height="{height}px" style:transform="translate({cameraX}px, {cameraY}px) scale({mapScale * cameraZoom})">
  
  <svg class:venn-background={showVenn} width={graphWidth} {height} aria-label="Publisher connections">
   {#each clusteredLayout?.circles || [] as region (region.type)}
@@ -533,7 +543,7 @@
  </svg>
 
  {#each displayNodes as node (node.key)}
-  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { hoveredPublisher = null; }} class="ownership-node" style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:relationship-outlined={!showVenn && relationshipOutlines.get(node.key)?.length > 0} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><RelationshipOutline width={8} types={showVenn ? [] : relationshipOutlines.get(node.key) || []} /><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => hoveredPublisher = null} >{node.name}</button></div>
+  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:relationship-outlined={!showVenn && relationshipOutlines.get(node.key)?.length > 0} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><RelationshipOutline width={8} types={showVenn ? [] : relationshipOutlines.get(node.key) || []} /><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
   <div class="floating-node-label" class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}</div>
