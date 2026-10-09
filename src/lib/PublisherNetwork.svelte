@@ -468,7 +468,7 @@
  {/each}
  </div></div></div>
  {#if canFocusSelection}
-  <div class="focus-action"><button onclick={focusSelection}>Focus on {selectedEntity.name} →</button></div>
+  <div class="focus-action"><button onclick={focusSelection}>Focus on {selectedEntity.name}</button></div>
  {/if}
  </div>
 
@@ -491,8 +491,8 @@
  .record-context { margin:.4rem 0 0; font-size:.8rem; color:#555; }
  .graph-column { min-width:0; }
  .focus-action { display:flex; justify-content:center; padding:.75rem 0; }
- .focus-action button { font:inherit; font-weight:600; color:#254c6f; background:#fff5c4; border:1px solid #b89a35; border-radius:4px; padding:.65rem 1rem; min-height:44px; cursor:pointer; }
- .focus-action button:hover { background:#ffed9a; }
+ .focus-action button { font:inherit; font-size:.75rem; font-weight:400; color:#777; background:transparent; border:0; border-radius:3px; padding:.35rem .65rem; min-height:36px; cursor:pointer; }
+ .focus-action button:hover { color:#254c6f; text-decoration:underline; }
  .focus-action button:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
  .window-controls { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; flex-shrink:0; }
  .resize { min-height:36px; font:inherit; font-size:.75rem; border:1px solid #ddd; background:#fff; color:#254c6f; padding:.25rem .6rem; cursor:pointer; }
