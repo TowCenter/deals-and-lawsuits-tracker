@@ -597,7 +597,7 @@
   </div>
   {#if inheritedAncestorKeys.size}<span class="inheritance-key">Dashed = inherited from parent</span>{/if}
  </div>
- {#if showVenn}
+ {#if displayNodes.some(node => node.hasChildren)}
   <div class="ownership-legend">
    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14"/><circle cx="11" cy="18" r="5"/><circle cx="22" cy="18" r="4"/></svg>
    <span>Circles within a circle represent organizations owned by the enclosing organization.</span>
