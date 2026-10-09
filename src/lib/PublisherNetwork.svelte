@@ -160,19 +160,20 @@
    });
   for (const node of candidates) {
    const isActiveLabel = node.key === hoveredPublisher || node.key === selectedPublisher;
-   if (node.key !== hoveredPublisher && node.key !== selectedPublisher && !(focusedEntity?.type === 'publisher' && node.key === normalize(focusedEntity.name))) continue;
+   const isVennLargeNode = showVenn && node.hasDirectRelationship && node.r * scale >= 20;
+   if (!isActiveLabel && !isVennLargeNode && !(focusedEntity?.type === 'publisher' && node.key === normalize(focusedEntity.name))) continue;
    const font = 14 / scale;
-   const width = Math.min(node.name.length * font * .58 + font, 180 / scale);
+   const width = Math.min(node.name.length * font * .58 + font, 180 / scale, isVennLargeNode && !isActiveLabel ? Math.max(100 / scale, node.width * .8) : Infinity);
    const lineCount = Math.max(1, Math.ceil(node.name.length * font * .58 / width));
    const height = font * 1.4 * lineCount;
    let x = node.x+node.r;
    const viewportLeft = -cameraX / scale;
    const viewportRight = (viewportWidth - cameraX) / scale;
-   x = Math.max(viewportLeft+width/2+8/scale, Math.min(viewportRight-width/2-8/scale,x));
-   let y = node.hasChildren && !isActiveLabel ? node.y+(node.labelInset||0) : node.y+node.r;
+   if (!isVennLargeNode || isActiveLabel) x = Math.max(viewportLeft+width/2+8/scale, Math.min(viewportRight-width/2-8/scale,x));
+   let y = node.hasChildren && !isActiveLabel && !isVennLargeNode ? node.y+(node.labelInset||0) : node.y+node.r;
    if (isActiveLabel) y = Math.max((-cameraY+8)/scale+height/2, Math.min((viewportHeight-cameraY-8)/scale-height/2,y));
    const box={left:x-width/2-5/scale,right:x+width/2+5/scale,top:y-height/2-4/scale,bottom:y+height/2+4/scale};
-   if (!isActiveLabel && boxes.some(other=>box.left<other.right&&box.right>other.left&&box.top<other.bottom&&box.bottom>other.top)) continue;
+   if (!isActiveLabel && !isVennLargeNode && boxes.some(other=>box.left<other.right&&box.right>other.left&&box.top<other.bottom&&box.bottom>other.top)) continue;
    boxes.push(box);
    labels.push({node,x,y,font,width});
   }
@@ -569,7 +570,7 @@
   <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" class:relationship-outline={showVenn && relationshipOutlines.has(node.key)} style:--relationship-outline={showVenn ? relationshipOutlines.get(node.key) : undefined} style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
-  <div class="floating-node-label" class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}{#if canFocusSelection && selectedEntity.type === 'publisher' && label.node.key === selectedPublisher}{@render exploreSelection(selectedEntity.name)}{/if}</div>
+  <div class="floating-node-label" class:venn-node-label={showVenn} class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}{#if canFocusSelection && selectedEntity.type === 'publisher' && label.node.key === selectedPublisher}{@render exploreSelection(selectedEntity.name)}{/if}</div>
  {/each}
  {#each renderedCompanies as company (company)}<div class="company-node" style:--relationship-fill={relationshipFills.get(`platform:${company}`)} class:muted-node={highlighting && !highlightedCompanies.has(company)} class:selected-node={selectedPlatform === company} class:focused-node={focusedEntity?.type === 'platform' && normalize(focusedEntity.name) === normalize(company)} class:hovered-node={hoveredPlatform === company} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><button class="platform-name" aria-label={company} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick || suppressGraphClick) return; selectEntity('platform', company); }} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPlatform = company; }} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
  {#each renderedCompanies as company (company)}
@@ -687,6 +688,7 @@
  .platform-name:active { cursor:grabbing; }
  .publisher-name:focus-visible,.platform-name:focus-visible { outline:2px solid #254c6f; outline-offset:-4px; }
  .floating-node-label { position:absolute; z-index:60; pointer-events:none; white-space:normal; overflow-wrap:break-word; text-align:center; transform:translate(-50%,-50%); line-height:1.2; font-weight:500; color:#111; text-shadow:0 0 2px #fff,0 0 4px #fff,0 0 6px #fff,0 0 8px #ffffffd9; }
+ .floating-node-label.venn-node-label { -webkit-text-stroke:1px #fff; paint-order:stroke fill; text-shadow:0 0 3px #fff,0 0 6px #fff,0 0 10px #fff,0 0 14px #ffffffd9; }
  .floating-node-label.platform-label { font-weight:600; }
  .floating-node-label.muted-label { opacity:.3; }
  .floating-node-label.platform-label.muted-label { opacity:.85; }
