@@ -235,6 +235,7 @@
   return connectionNodeIndex.get(entry.id) || [];
  }
  const entries = $derived(networkEntries(viewRecords));
+ const availableKinds = $derived(new Set(entries.flatMap(entry => (entry.interaction || []).map(value => String(value).toLowerCase()))));
  const companies = $derived(vennLayout ? vennLayout.nodes.filter(node=>node.key.startsWith('platform:')).map(node=>node.name) : entityView?.companies || [...new Set(entries.flatMap(entry => entry.companies))]);
  const height = $derived(Math.max(650, Math.sqrt(hierarchy.nodes.length + companies.length) * 130));
  const platformRadius = $derived(Math.max(80, ...companies.map(name => name.length * 13 * .58 / 1.8 + 14)));
@@ -550,7 +551,7 @@
   <span class="legend-hint">Filter relationships:</span>
   <div class="filter-buttons" role="group" aria-label="Relationship filters">
   {#each ['lawsuit', 'deal', 'grant'] as interaction}
-   <button type="button" title={`Filter ${interaction}s; click again to show all`} class="interaction-tag {interaction}" aria-pressed={selectedKind === interaction}
+   <button type="button" disabled={!availableKinds.has(interaction)} title={availableKinds.has(interaction) ? `Filter ${interaction}s; click again to show all` : `No ${interaction}s in this view`} class="interaction-tag {interaction}" aria-pressed={selectedKind === interaction}
     onpointerenter={event => { if(event.pointerType !== 'touch') hoveredKind = interaction; }}
     onpointerleave={() => hoveredKind = null}
     onfocus={() => hoveredKind = interaction} onblur={() => hoveredKind = null}
@@ -605,7 +606,8 @@
  .legend-hint,.inheritance-key {font-size:.8rem;color:#666;line-height:1.4;}
  .inheritance-key {margin-left:.5rem;}
  .interaction-tag { display:inline-flex;align-items:center;justify-content:center;min-height:36px; font-family:inherit; font-weight:500; border:1px solid transparent; cursor:pointer; padding:.35rem .85rem; border-radius:6px; font-size:.8rem; line-height:1.25; text-transform:none; letter-spacing:normal; }
- .interaction-tag:hover {border-color:currentColor;}
+ .interaction-tag:hover:not(:disabled) {border-color:currentColor;}
+ .interaction-tag:disabled { opacity:.35; cursor:default; }
  .interaction-tag:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
  .interaction-tag[aria-pressed="true"] { border-color:currentColor; box-shadow:inset 0 0 0 1px currentColor; }
  .interaction-tag.lawsuit { background:#fbe9e9; color:#8b1a1a; }
