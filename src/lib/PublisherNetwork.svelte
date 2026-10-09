@@ -2,7 +2,6 @@
  import { createEntityNetworkIndex, entityKey, networkEntries, platformConnectionNames } from './entityNetwork.js';
  import { layoutVennNetwork } from './vennNetwork.js';
  import { groupNetworkConnections } from './networkConnectionGroups.js';
- import RelationshipOutline from './RelationshipOutline.svelte';
  import { isMdlConsolidation } from './mdl.js';
  import { onMount, tick, untrack } from 'svelte';
  import { formatDate } from './utils.js';
@@ -166,7 +165,7 @@
    });
   for (const node of candidates) {
    const isHovered = node.key === hoveredPublisher;
-   if (showVenn && node.key !== hoveredPublisher && node.key !== selectedPublisher && !(focusedEntity?.type === 'publisher' && node.key === normalize(focusedEntity.name))) continue;
+   if (node.key !== hoveredPublisher && node.key !== selectedPublisher && !(focusedEntity?.type === 'publisher' && node.key === normalize(focusedEntity.name))) continue;
    const font = 14 / scale;
    const width = Math.min(node.name.length * font * .58 + font, 180 / scale);
    const lineCount = Math.max(1, Math.ceil(node.name.length * font * .58 / width));
@@ -277,23 +276,6 @@
    return [key,fill];
   }));
  });
- const relationshipOutlines = $derived.by(() => {
-  const outlines = new Map();
-  const platform = focusedEntity?.type === 'platform' ? focusedEntity.name : !focusedEntity ? selectedPlatform : null;
-  const publisher = focusedEntity?.type === 'publisher' ? focusedEntity.name : !focusedEntity ? selectedPublisher : null;
-  if (!platform && !publisher) return outlines;
-  const ancestors = publisher ? publisherAndAncestors(ownership, publisher) : new Set();
-  for (const link of connections) {
-   if (platform ? link.company !== platform : !ancestors.has(link.node.key)) continue;
-   const key = platform ? link.node.key : `platform:${link.company}`;
-   if (!outlines.has(key)) outlines.set(key, new Set());
-   for (const type of kinds(link.entry)) {
-    const normalized = type.includes('lawsuit') ? 'lawsuit' : type.includes('grant') ? 'grant' : type.includes('deal') ? 'deal' : null;
-    if (normalized && (!selectedKind || selectedKind === normalized)) outlines.get(key).add(normalized);
-   }
-  }
-  return new Map([...outlines].map(([key, types]) => [key, ['lawsuit', 'deal', 'grant'].filter(type => types.has(type))]));
- });
  const drawnConnections = $derived(groupNetworkConnections(connections,kind,activeConnection)
   .sort((a,b)=>Number(emphasizedConnection(a))-Number(emphasizedConnection(b))));
  const highlightedPublishers = $derived.by(() => {
@@ -366,7 +348,7 @@
     try {
      do {
       const {key,source,target}=pending[index++];
-      accumulated.set(key,routeCircleConnection(source,target,workerNodes,width,canvasHeight,false,{x:target.x-96,y:target.y+target.r}));
+      accumulated.set(key,routeCircleConnection(source,target,workerNodes,width,canvasHeight));
      } while(index<pending.length && performance.now()-start<8);
      publish(index===pending.length);
      if(index<pending.length)fallbackTimer=setTimeout(step,0);
@@ -543,12 +525,12 @@
  </svg>
 
  {#each displayNodes as node (node.key)}
-  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:relationship-outlined={!showVenn && relationshipOutlines.get(node.key)?.length > 0} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><RelationshipOutline width={8} types={showVenn ? [] : relationshipOutlines.get(node.key) || []} /><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
+  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
   <div class="floating-node-label" class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}</div>
  {/each}
- {#each renderedCompanies as company (company)}<div class="company-node" style:--relationship-fill={showVenn ? relationshipFills.get(`platform:${company}`) : undefined} class:relationship-outlined={!showVenn && relationshipOutlines.get(`platform:${company}`)?.length > 0} class:muted-node={highlighting && !highlightedCompanies.has(company)} class:selected-node={selectedPlatform === company} class:focused-node={focusedEntity?.type === 'platform' && normalize(focusedEntity.name) === normalize(company)} class:hovered-node={hoveredPlatform === company} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><RelationshipOutline width={8} types={showVenn ? [] : relationshipOutlines.get(`platform:${company}`) || []} /><button class="platform-name" aria-label={company} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick || suppressGraphClick) return; selectEntity('platform', company); }} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPlatform = company; }} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
+ {#each renderedCompanies as company (company)}<div class="company-node" style:--relationship-fill={relationshipFills.get(`platform:${company}`)} class:muted-node={highlighting && !highlightedCompanies.has(company)} class:selected-node={selectedPlatform === company} class:focused-node={focusedEntity?.type === 'platform' && normalize(focusedEntity.name) === normalize(company)} class:hovered-node={hoveredPlatform === company} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><button class="platform-name" aria-label={company} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick || suppressGraphClick) return; selectEntity('platform', company); }} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPlatform = company; }} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
  {#each renderedCompanies as company (company)}
   {@const platform = platformNodes.get(company)}
   {#if !showVenn || hoveredPlatform === company || selectedPlatform === company || (focusedEntity?.type === 'platform' && normalize(focusedEntity.name) === normalize(company))}
@@ -602,14 +584,6 @@
  .network-subtitle { margin:.3rem 0 0; color:#666; font-size:.75rem; font-weight:500; letter-spacing:.09em; text-transform:uppercase; line-height:1.3; }
  h2 { margin:0; font-size:1.4rem; line-height:1.25; font-weight:650; }
  .record-context { margin:.4rem 0 0; font-size:.8rem; color:#555; }
- .clustered .ownership-node,.clustered .company-node { background:var(--relationship-fill,#f8fafb); border-color:#cbd3d9; }
- .clustered .ownership-node.parent-circle { background:var(--relationship-fill,#f0f3f5); }
- .clustered .ownership-node.parent-circle.alt { background:var(--relationship-fill,#e8edf0); }
- .clustered .ownership-node.selected-node,.clustered .company-node.selected-node,.clustered .ownership-node.hovered-node,.clustered .company-node.hovered-node { background:#fff5c4; border-color:#b89a35; }
- .ownership-node.focused-node,.ownership-node.focused-node.parent-circle.alt,.company-node.focused-node,.clustered .ownership-node.focused-node,.clustered .company-node.focused-node { background:#fff5c4; border:2px solid #b89a35; opacity:1; }
- .clustered .relationship-outlined { border-color:transparent; }
- .clustered .ownership-node,.clustered .company-node { opacity:1; }
- .clustered .floating-node-label { font-weight:500; }
  .venn-title { font-family:inherit; font-weight:600; letter-spacing:.025em; pointer-events:none; }
  .venn-title.compact-title { letter-spacing:normal; font-weight:500; stroke:#fff; stroke-width:3px; paint-order:stroke; stroke-linejoin:round; }
  .connection-count { font-family:inherit; font-weight:600; pointer-events:none; }
@@ -649,20 +623,20 @@
  svg { position:absolute; inset:0; z-index:25; pointer-events:none; overflow:visible; }
  svg.venn-background { z-index:0; }
  .venn-outline { fill:none; stroke-width:2px; stroke-opacity:1; opacity:1; }
- .ownership-node,.company-node { position:absolute; display:flex; align-items:center; justify-content:center; box-sizing:border-box; border:1.5px solid #666; border-radius:50%; clip-path:circle(50%); background:#fff; }
- .ownership-node.parent-circle { background:#f2f2f2; }
- .ownership-node.parent-circle.alt { background:#e5e5e5; }
- .company-node { z-index:30; background:#e8f2fb; border-color:#6b8fae; }
+ .ownership-node,.company-node { position:absolute; display:flex; align-items:center; justify-content:center; box-sizing:border-box; border:1px solid #cbd3d9; border-radius:50%; clip-path:circle(50%); background:var(--relationship-fill,#f8fafb); }
+ .ownership-node.parent-circle { background:var(--relationship-fill,#f0f3f5); }
+ .ownership-node.parent-circle.alt { background:var(--relationship-fill,#e8edf0); }
+ .company-node { z-index:30; }
  .ownership-node.selected-node,.ownership-node.selected-node.parent-circle.alt,.company-node.selected-node,.ownership-node.hovered-node,.ownership-node.hovered-node.parent-circle.alt,.company-node.hovered-node { background:#fff5c4; border:2px solid #b89a35; }
  .ownership-node.selected-node,.company-node.selected-node,.ownership-node.hovered-node,.company-node.hovered-node { opacity:1; }
- .ownership-node.relationship-outlined,.company-node.relationship-outlined { border-color:transparent; }
+ .ownership-node.focused-node,.ownership-node.focused-node.parent-circle.alt,.company-node.focused-node { background:#fff5c4; border:2px solid #b89a35; opacity:1; }
  .ownership-node.muted-node,.company-node.muted-node { opacity:.8; }
  .ownership-node.outlined-descendant.muted-node { opacity:1; background:transparent; border-color:#777; }
  .publisher-name,.platform-name { border-radius:50%; width:100%; height:100%; padding:0; border:0; background:none; color:transparent; font-size:0; cursor:pointer; user-select:none; }
  .platform-name { cursor:grab; touch-action:none; }
  .platform-name:active { cursor:grabbing; }
  .publisher-name:focus-visible,.platform-name:focus-visible { outline:2px solid #254c6f; outline-offset:-4px; }
- .floating-node-label { position:absolute; z-index:60; pointer-events:none; white-space:normal; overflow-wrap:break-word; text-align:center; transform:translate(-50%,-50%); line-height:1.2; font-weight:500; color:#111; text-shadow:0 0 2px #fff,0 0 3px #fff; }
+ .floating-node-label { position:absolute; z-index:60; pointer-events:none; white-space:normal; overflow-wrap:break-word; text-align:center; transform:translate(-50%,-50%); line-height:1.2; font-weight:500; color:#111; text-shadow:0 0 2px #fff,0 0 4px #fff,0 0 6px #fff,0 0 8px #ffffffd9; }
  .floating-node-label.platform-label { font-weight:600; }
  .floating-node-label.muted-label { opacity:.3; }
  .floating-node-label.platform-label.muted-label { opacity:.85; }

@@ -169,6 +169,24 @@ export function routeCircleConnection(source, target, circles, width, height, re
   if(!obstacles.some(parent=>Math.hypot(c.x-center(parent).x,c.y-center(parent).y)+node.r<=parent.r+.001))obstacles.push(node);
  }
  const blocked=(x,y)=>obstacles.some(node=>Math.hypot(x-center(node).x,y-center(node).y)<node.r+padding);
+ // Prefer a single gentle curve when it clears the ownership circles.
+ // Avoid forcing every connection through a narrow shared approach corridor.
+ if (!corridor && b.x > a.x + source.r + target.r) {
+  const dx=b.x-a.x,dy=b.y-a.y,distance=Math.hypot(dx,dy);
+  const start={x:a.x+dx/distance*source.r,y:a.y+dy/distance*source.r};
+  const end={x:b.x-target.r,y:b.y};
+  const span=end.x-start.x;
+  const c1={x:start.x+span*.4,y:start.y};
+  const c2={x:end.x-span*.4,y:end.y};
+  let collision=false;
+  for(let sample=0;sample<=64;sample++){
+   const t=sample/64,u=1-t;
+   const x=u*u*u*start.x+3*u*u*t*c1.x+3*u*t*t*c2.x+t*t*t*end.x;
+   const y=u*u*u*start.y+3*u*u*t*c1.y+3*u*t*t*c2.y+t*t*t*end.y;
+   if(blocked(x,y)){collision=true;break;}
+  }
+  if(!collision)return `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`;
+ }
  // Bound routing work independently of the database or zoomed canvas size.
  const step=retry ? Math.max(3,Math.sqrt(width*height/48000),Math.min(source.r/2,width/256,height/192)) : Math.max(6,width/192,height/128),cols=Math.ceil(width/step),rows=Math.ceil(height/step);
  const index=(x,y)=>y*cols+x;

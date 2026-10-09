@@ -57,3 +57,14 @@ test('shared corridors preserve direct endpoints and a common platform approach'
   assert.deepEqual([...publisherAndAncestors(graph, 'News Corp')], ['news corp']);
   assert(!publisherAndAncestors(graph, 'Dow Jones').has('new york post'));
  });
+
+test('unobstructed connections use one gentle curve with endpoints on node boundaries',()=>{
+ const source={key:'publisher',x:40,y:240,r:30};
+ const target={key:'platform',x:500,y:40,r:50};
+ const path=routeCircleConnection(source,target,[source,target],700,450);
+ assert.equal((path.match(/ C /g)||[]).length,1);
+ assert(!path.includes(' Q ')&&!path.includes(' L '));
+ const coordinates=path.match(/-?\d+(?:\.\d+)?/g).map(Number);
+ assert(Math.abs(Math.hypot(coordinates[0]-70,coordinates[1]-270)-30)<.001);
+ assert.deepEqual(coordinates.slice(-2),[500,90]);
+});
