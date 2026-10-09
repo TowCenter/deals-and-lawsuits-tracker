@@ -272,6 +272,41 @@
    return [key,fill];
   }));
  });
+ const relationshipOutlines = $derived.by(() => {
+  const typesByNode = new Map();
+  for (const link of connections) {
+   if (!typesByNode.has(link.node.key)) typesByNode.set(link.node.key,new Set());
+   for (const type of kinds(link.entry)) if (['lawsuit','deal','grant'].includes(type)) typesByNode.get(link.node.key).add(type);
+  }
+  // Inherit outline styling through the complete ownership tree. Direct
+  // interactions keep their own colors; this does not add graph connections.
+  const directTypes = new Map(typesByNode);
+  const parents = new Map();
+  for (const [key, organization] of ownership) for (const child of organization.children) {
+   if (!parents.has(child)) parents.set(child,[]);
+   parents.get(child).push(key);
+  }
+  for (const node of displayNodes) {
+   if (directTypes.get(node.key)?.size) continue;
+   const pending = [...(parents.get(node.key) || [])];
+   const visited = new Set([node.key]);
+   const inherited = new Set();
+   while (pending.length) {
+    const key = pending.shift();
+    if (visited.has(key)) continue;
+    visited.add(key);
+    const types = directTypes.get(key);
+    if (types?.size) for (const type of types) inherited.add(type);
+    else pending.push(...(parents.get(key) || []));
+   }
+   if (inherited.size) typesByNode.set(node.key,inherited);
+  }
+  const colors = {lawsuit:'#b4232d',deal:'#21823b',grant:'#1565c0'};
+  return new Map([...typesByNode].map(([key,types]) => {
+   const ordered = ['lawsuit','deal','grant'].filter(type=>types.has(type));
+   return [key,ordered.length === 1 ? colors[ordered[0]] : `conic-gradient(${ordered.map((type,index)=>`${colors[type]} ${index/ordered.length*100}% ${(index+1)/ordered.length*100}%`).join(',')})`];
+  }));
+ });
  const drawnConnections = $derived(groupNetworkConnections(connections,kind,activeConnection)
   .sort((a,b)=>Number(emphasizedConnection(a))-Number(emphasizedConnection(b))));
  const highlightedPublishers = $derived.by(() => {
@@ -528,7 +563,7 @@
  </svg>
 
  {#each displayNodes as node (node.key)}
-  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
+  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" class:relationship-outline={showVenn && relationshipOutlines.has(node.key)} style:--relationship-outline={showVenn ? relationshipOutlines.get(node.key) : undefined} style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
   <div class="floating-node-label" class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}{#if canFocusSelection && selectedEntity.type === 'publisher' && label.node.key === selectedPublisher}{@render exploreSelection(selectedEntity.name)}{/if}</div>
@@ -562,6 +597,12 @@
   </div>
   {#if inheritedAncestorKeys.size}<span class="inheritance-key">Dashed = inherited from parent</span>{/if}
  </div>
+ {#if showVenn}
+  <div class="ownership-legend">
+   <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14"/><circle cx="11" cy="18" r="5"/><circle cx="22" cy="18" r="4"/></svg>
+   <span>Circles within a circle represent organizations owned by the enclosing organization.</span>
+  </div>
+ {/if}
  </div>
 
  {#if panelRecords.length}
@@ -598,6 +639,8 @@
  .close { min-width:40px; min-height:40px; border:0; background:none; font-size:1.2rem; cursor:pointer; }
  .routing-status { margin:0 0 .5rem; font-size:.8rem; color:#555; }
  .legend { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; margin:1rem 0 .25rem; justify-content:center; }
+ .ownership-legend { display:flex; align-items:center; justify-content:center; gap:.5rem; margin:.5rem 0 .25rem; color:#666; font-size:.75rem; line-height:1.4; }
+ .ownership-legend svg { position:static; flex:0 0 28px; width:28px; height:28px; fill:#f4f6f8; stroke:#8b969f; stroke-width:1; }
  .filter-buttons { display:flex; align-items:center; gap:.5rem; }
  .fit-view { position:absolute; right:12px; top:12px; z-index:70; display:flex; align-items:center; justify-content:center; width:40px; height:40px; color:#254c6f; background:#fff; border:1px solid #cbd5de; border-radius:6px; padding:8px; cursor:pointer; box-shadow:0 1px 4px #0001; }
  .fit-view svg { position:static; width:22px; height:22px; }
@@ -623,6 +666,9 @@
  svg.venn-background { z-index:0; }
  .venn-outline { fill:none; stroke-width:2px; stroke-opacity:1; opacity:1; }
  .ownership-node,.company-node { position:absolute; display:flex; align-items:center; justify-content:center; box-sizing:border-box; border:1px solid #cbd3d9; border-radius:50%; clip-path:circle(50%); background:var(--relationship-fill,#f8fafb); }
+ .ownership-node.relationship-outline { border-color:transparent; }
+ .ownership-node.relationship-outline::after { content:""; position:absolute; inset:0; border-radius:inherit; padding:1px; background:var(--relationship-outline); mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0); mask-composite:exclude; pointer-events:none; }
+ .ownership-node.relationship-outline.selected-node::after,.ownership-node.relationship-outline.hovered-node::after,.ownership-node.relationship-outline.focused-node::after { display:none; }
  .ownership-node.parent-circle { background:var(--relationship-fill,#f0f3f5); }
  .ownership-node.parent-circle.alt { background:var(--relationship-fill,#e8edf0); }
  .company-node { z-index:30; }
