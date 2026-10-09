@@ -1,5 +1,6 @@
 <script>
 	import { base } from '$app/paths';
+	import { organizationNameAtEvent } from './organizationNames.js';
 	import { isMdlConsolidation } from './mdl.js';
 	import { buildOwnershipGraph, publisherNames, normalizeName } from './publisherNetwork.js';
 	import PublisherNetwork from './PublisherNetwork.svelte';
@@ -87,19 +88,19 @@
 
 	let expandedCards = $state(new Set());
 	$effect(() => { if (focusedRecordId != null) expandedCards = new Set([focusedRecordId]); });
-	
+
 	// True for a card shown because another card links to it, not the card being viewed
 	function isRelatedCardInFilteredView(row) {
 		if (viewingRelatedTo == null || row.id === viewingRelatedTo) return false;
 		const sourceRow = idToRowMap.get(viewingRelatedTo);
 		return Array.isArray(sourceRow?.linked_entry_ids) && sourceRow.linked_entry_ids.includes(row.id);
 	}
-	
+
 	// Helper to check if a card is expanded
 	function isCardExpanded(rowId) {
 		return expandedCards.has(rowId);
 	}
-	
+
 	// ID of the card whose related items we're viewing, or null for all
 	let viewingRelatedTo = $state(null);
 
@@ -329,7 +330,7 @@
 		if (selection && selection.toString().trim().length > 0) {
 			return; // Don't collapse if text is selected
 		}
-		
+
 		// Don't collapse if clicking a link (let it work normally)
 		const target = event.target;
 		if (target.closest('a, button, input, select, textarea, [role=button]')) {
@@ -354,7 +355,7 @@
 
 	// Cache for month names to avoid repeated locale string operations
 	const monthNameCache = new Map();
-	
+
 	function getMonthName(dateObj) {
 		const year = dateObj.getFullYear();
 		const month = dateObj.getMonth();
@@ -397,7 +398,7 @@
 				const dateB = parseDate(firstItemB.date);
 				return dateB.getTime() - dateA.getTime();
 			});
-		
+
 		for (const key of sortedKeys) {
 			sortedGroups[key] = groups[key];
 		}
@@ -443,7 +444,7 @@
 	 */
 	function extractHierarchyOrgsImpl(parentChildMatches) {
 		if (!Array.isArray(parentChildMatches)) return [];
-		
+
 		const orgs = [];
 		for (const match of parentChildMatches) {
 			if (match?.lineage && Array.isArray(match.lineage)) {
@@ -483,7 +484,7 @@
 	 */
 	// Combined regex for better performance
 	const URL_DOMAIN_PATTERN = /https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*\.[a-zA-Z]{2,}[^\s]*|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/gi;
-	
+
 	function removeUrlsAndDomains(text) {
 		if (!text) return '';
 		return String(text).replace(URL_DOMAIN_PATTERN, '');
@@ -497,7 +498,7 @@
 	 */
 	function matchesSearch(row, query) {
 		if (!query?.trim()) return true;
-		
+
 		const queryLower = query.toLowerCase();
 				const searchableFields = [
 					row.date,
@@ -512,9 +513,11 @@
 			row.defendant,
 			row.plaintiff,
 			row.location,
-			row.affected_publications
+			row.affected_publications,
+            Object.values(row.organization_names_at_event_date || {}),
+            Object.values(row.organization_previous_names || {}).flat()
 				];
-				
+
 		// Build searchable text more efficiently
 		let searchableText = '';
 		for (const field of searchableFields) {
@@ -525,7 +528,7 @@
 				searchableText += ' ' + String(field).toLowerCase();
 			}
 		}
-		
+
 		// Handle sources separately - remove URLs/domains from sources only
 		if (row.sources) {
 			const sources = Array.isArray(row.sources) ? row.sources : [row.sources];
@@ -536,7 +539,7 @@
 				}
 			}
 		}
-				
+
 		return searchableText.includes(queryLower);
 	}
 
@@ -566,7 +569,7 @@
 				dataToFilter = [];
 			}
 		}
-		
+
 		// Early return if no filters
 		if (!filterInteraction?.length && !filterType?.length && !filterPlatform?.length &&
 		    !filterPublishers?.length && !filterLocation?.length && !searchQuery?.trim()) {
@@ -579,7 +582,7 @@
 			});
 			return sorted;
 		}
-		
+
 		const filtered = [];
 		for (const row of dataToFilter) {
 			// Filter by interaction
@@ -712,7 +715,7 @@
 	 */
 	// Cache for escaped patterns to avoid repeated regex compilation
 	const highlightPatternCache = new Map();
-	
+
 	function highlightText(text, searchTerms = []) {
 		if (!text) return '';
 
@@ -735,12 +738,12 @@
 
 		// Escape HTML first to prevent XSS
 		const escapedText = escapeHtml(text);
-		
+
 		// Escape special regex characters and create pattern
 		const escapedPatterns = searchPatterns
 			.filter(p => p && String(p).trim())
 			.map(p => String(p).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-		
+
 		if (escapedPatterns.length === 0) {
 			return escapedText;
 		}
@@ -757,12 +760,12 @@
 				highlightPatternCache.delete(firstKey);
 			}
 		}
-		
+
 		// Split text into segments: URLs/domains and regular text
 		const segments = [];
 		let lastIndex = 0;
 		URL_DOMAIN_PATTERN.lastIndex = 0;
-		
+
 		let match;
 		while ((match = URL_DOMAIN_PATTERN.exec(escapedText)) !== null) {
 			if (match.index > lastIndex) {
@@ -771,15 +774,15 @@
 			segments.push({ type: 'url', content: match[0] });
 			lastIndex = match.index + match[0].length;
 		}
-		
+
 		if (lastIndex < escapedText.length) {
 			segments.push({ type: 'text', content: escapedText.substring(lastIndex) });
 		}
-		
+
 		if (segments.length === 0) {
 			segments.push({ type: 'text', content: escapedText });
 		}
-		
+
 		// Apply highlighting only to text segments (not URLs)
 		return segments.map(segment => {
 			if (segment.type === 'url') {
@@ -811,7 +814,7 @@
 	 */
 	function getInteractionTypes(interaction) {
 		if (!interaction) return [];
-		
+
 		const interactions = Array.isArray(interaction) ? interaction : [interaction];
 		return interactions
 			.map(i => {
@@ -930,13 +933,13 @@
 		if (!Array.isArray(matches) || matches.length === 0) return {};
 
 		const tree = {};
-		
+
 		// First pass: determine if we have any 3+ level lineages
 		// If yes, ALL organizations at position 1 should be shown as intermediate nodes
 		const hasMultiLevelLineages = matches.some(match => 
 			match.lineage && Array.isArray(match.lineage) && match.lineage.length > 2
 		);
-		
+
 		// Second pass: build the tree structure
 		// Key rule: If ANY org at position 1 is intermediate (in a 3+ level lineage),
 		// then ALL orgs at position 1 should be shown as intermediate nodes at the same level
@@ -1005,9 +1008,9 @@
 		// Cleanup: Remove any publications that match their parent organization name
 		function cleanupTree(node, parentName = null) {
 			if (typeof node !== 'object' || node === null) return;
-			
+
 					const normalizedParent = parentName ? String(parentName).trim() : null;
-			
+
 			for (const key in node) {
 				if (key === 'publications' && Array.isArray(node[key])) {
 					// Filter out publications that match the parent name
@@ -1043,7 +1046,7 @@
 	// Cache for normalized sources to avoid re-processing (limit size)
 	const sourceCache = new Map();
 	const MAX_SOURCE_CACHE_SIZE = 1000;
-	
+
 	// Pre-compiled regex patterns for better performance
 	const URL_PATTERNS = {
 		completeArray: /\[['"](https?:\/\/[^'"]+)['"]/g,
@@ -1054,16 +1057,16 @@
 		plainUrl: /(https?:\/\/[^\s,\[\]'"]+)/g,
 		domain: /^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]*\.[a-zA-Z]{2,}/
 	};
-	
+
 	function normalizeSources(value) {
 		if (!value) return [];
-		
+
 		// Check cache first
 		const cacheKey = typeof value === 'string' ? value : JSON.stringify(value);
 		if (sourceCache.has(cacheKey)) {
 			return sourceCache.get(cacheKey);
 		}
-		
+
 		let result;
 		if (Array.isArray(value)) {
 			result = value
@@ -1072,27 +1075,27 @@
 		} else if (typeof value === 'string') {
 			const trimmed = value.trim();
 			const results = new Set(); // Use Set to avoid duplicates
-			
+
 			// Extract URLs using all patterns
 			const extractUrl = (url) => {
 				const cleaned = cleanUrl(url.trim());
 				if (cleaned) results.add(cleaned);
 			};
-			
+
 			// Pattern 1: Complete array format
 			let match;
 			URL_PATTERNS.completeArray.lastIndex = 0;
 			while ((match = URL_PATTERNS.completeArray.exec(trimmed)) !== null) {
 				extractUrl(match[1]);
 			}
-			
+
 			// Pattern 2: Incomplete array format
 			URL_PATTERNS.incompleteArray.lastIndex = 0;
 			while ((match = URL_PATTERNS.incompleteArray.exec(trimmed)) !== null) {
 				const url = match[1].replace(/['"]+$/, '').replace(/\]$/, '').trim();
 				extractUrl(url);
 			}
-			
+
 			// Pattern 2b: Aggressive array match
 			if (trimmed.includes("['https://") || trimmed.includes('["https://')) {
 				const aggressiveMatch = trimmed.match(URL_PATTERNS.aggressiveArray);
@@ -1101,19 +1104,19 @@
 					extractUrl(url);
 				}
 			}
-			
+
 			// Pattern 3: Quoted URLs
 			URL_PATTERNS.quotedUrl.lastIndex = 0;
 			while ((match = URL_PATTERNS.quotedUrl.exec(trimmed)) !== null) {
 				extractUrl(match[1]);
 			}
-			
+
 			// Pattern 3b: Unclosed quote URLs
 			URL_PATTERNS.unclosedQuote.lastIndex = 0;
 			while ((match = URL_PATTERNS.unclosedQuote.exec(trimmed)) !== null) {
 				extractUrl(match[1]);
 			}
-			
+
 			// Pattern 4: Plain URLs
 			URL_PATTERNS.plainUrl.lastIndex = 0;
 			while ((match = URL_PATTERNS.plainUrl.exec(trimmed)) !== null) {
@@ -1122,14 +1125,14 @@
 					extractUrl(url);
 				}
 			}
-			
+
 			// Process remaining string for plain domains
 			let remaining = trimmed
 				.replace(/\[['"](https?:\/\/[^\s,]+)/g, '')
 				.replace(/\[['"](https?:\/\/[^'"]+)['"]/g, '')
 				.replace(/\[['"]?/g, '')
 				.replace(/['"]?\]?/g, '');
-			
+
 			const parts = remaining.split(',');
 			for (const part of parts) {
 				const cleaned = part.trim();
@@ -1138,14 +1141,14 @@
 				    cleaned.includes('://') || cleaned.startsWith('www.')) {
 					continue;
 				}
-				
+
 				if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) {
 					extractUrl(cleaned);
 				} else if (URL_PATTERNS.domain.test(cleaned)) {
 					results.add(`https://${cleaned}`);
 				}
 			}
-			
+
 			// Convert Set to array
 			if (results.size > 0) {
 				result = Array.from(results);
@@ -1173,7 +1176,7 @@
 		} else {
 			result = [];
 		}
-		
+
 		// Cache the result
 		if (result && result.length > 0) {
 			sourceCache.set(cacheKey, result);
@@ -1183,7 +1186,7 @@
 				sourceCache.delete(firstKey);
 			}
 		}
-		
+
 		return result || [];
 	}
 
@@ -1354,7 +1357,7 @@
 											<div class="header-left">
 												{#if Array.isArray(row.defendant) && row.defendant.length > 0}
 													{#each row.defendant as defendant}
-														<div class="header-item">{@html highlightText(defendant)}
+														<div class="header-item">{@html highlightText(organizationNameAtEvent(row, defendant))}
 {@render entityNetworkIcon(row.id, defendant, 'platform')}</div>
 													{/each}
 												{/if}
@@ -1363,7 +1366,7 @@
 											<div class="header-right-content">
 												{#if Array.isArray(row.plaintiff) && row.plaintiff.length > 0}
 													{#each row.plaintiff as plaintiff}
-														<div class="header-item">{@html highlightText(plaintiff)}
+														<div class="header-item">{@html highlightText(organizationNameAtEvent(row, plaintiff))}
 {@render entityNetworkIcon(row.id, plaintiff, 'publisher')}</div>
 													{/each}
 												{/if}
@@ -1372,7 +1375,7 @@
 											<div class="header-left">
 												{#if Array.isArray(row.platform) && row.platform.length > 0}
 													{#each row.platform as platform}
-														<div class="header-item">{@html highlightText(platform)}
+														<div class="header-item">{@html highlightText(organizationNameAtEvent(row, platform))}
 {@render entityNetworkIcon(row.id, platform, 'platform')}</div>
 													{/each}
 												{/if}
@@ -1381,7 +1384,7 @@
 											<div class="header-right-content">
 												{#if Array.isArray(allPublishers) && allPublishers.length > 0}
 													{#each allPublishers as pub}
-														<div class="header-item">{@html highlightText(pub)}
+														<div class="header-item">{@html highlightText(organizationNameAtEvent(row, pub))}
 {@render entityNetworkIcon(row.id, pub, 'publisher')}</div>
 													{/each}
 												{/if}
@@ -1419,12 +1422,12 @@
 						<div class="field-value">
 							{#if interactionType === 'lawsuit' && Array.isArray(entry.defendant) && entry.defendant.length > 0}
 								{#each entry.defendant as defendant}
-									<div class="field-item">{@html highlightText(defendant)}
+									<div class="field-item">{@html highlightText(organizationNameAtEvent(row, defendant))}
 {@render entityNetworkIcon(row.id, defendant, 'platform')}</div>
 								{/each}
 							{:else if Array.isArray(entry.platform) && entry.platform.length > 0}
 								{#each entry.platform as platform}
-									<div class="field-item">{@html highlightText(platform)}
+									<div class="field-item">{@html highlightText(organizationNameAtEvent(row, platform))}
 {@render entityNetworkIcon(row.id, platform, 'platform')}</div>
 								{/each}
 					{/if}
@@ -1439,7 +1442,7 @@
 						<div class="field-value">
                             {#if interactionType === 'grant'}
                              <GrantPublications presentation={grantPresentations(entry)}>
-                              {#snippet label(name)}{@html highlightText(name)}{/snippet}
+                              {#snippet label(name)}{@html highlightText(organizationNameAtEvent(row, name))}{/snippet}
                               {#snippet flags(name)}{@render countryFlags(entry, name)}{/snippet}
                               {#snippet networkIcon(name)}{@render entityNetworkIcon(row.id, name, 'publisher')}{/snippet}
                              </GrantPublications>
@@ -1450,7 +1453,7 @@
 								{@const hasMatches = Object.keys(orgTree).length > 0 || (orgTree.publications && orgTree.publications.length > 0)}
 								<div class="publisher-item">
 									<div class="field-item">
-										{@html highlightText(org)}
+										{@html highlightText(organizationNameAtEvent(row, org))}
 {@render entityNetworkIcon(row.id, org, 'publisher')}
 										{@render countryFlags(entry, org)}
 									</div>
@@ -1469,7 +1472,7 @@
 																	{#if interactionType === 'grant' && (entry.publications_received_grants || []).some(name => normalizeName(name) === normalizeName(publication))}
 																		<span class="hierarchy-label">Grantee: </span>
 																	{/if}
-																	{@html highlightText(publication)}
+																	{@html highlightText(organizationNameAtEvent(row, publication))}
 
 																	{@render countryFlags(entry, publication)}
 																</div>
@@ -1480,7 +1483,7 @@
 															<span class="hierarchy-intermediate-name">
                                                         {#if interactionType === 'grant' && (entry.publications_received_grants || []).some(name => normalizeName(name) === normalizeName(key))}<span class="hierarchy-label">Grantee: </span>{/if}
 
-																{@html highlightText(key)}
+																{@html highlightText(organizationNameAtEvent(row, key))}
 
 																{@render countryFlags(entry, key)}
 															</span>
@@ -1519,7 +1522,21 @@
 						</div>
 					</div>
 
-										{#if interactionType === 'lawsuit'}
+
+					</div>
+
+									<!-- Column 2 -->
+									<div class="card-column column-2">
+					<div class="card-field reported-details">
+						<div class="field-label">Reported Details</div>
+						<div class="field-value">
+							<span class="reported-text">
+							{@html highlightText(entry.reported_details || '—')}
+							</span>
+										</div>
+									</div>
+
+{#if interactionType === 'lawsuit'}
 											{@const progression = getStatusProgression(row)}
 											{#if entry.status || progression.length > 1}
 					<div class="card-field">
@@ -1564,18 +1581,6 @@
 												</div>
 											{/if}
 										{/if}
-					</div>
-
-									<!-- Column 2 -->
-									<div class="card-column column-2">
-					<div class="card-field reported-details">
-						<div class="field-label">Reported Details</div>
-						<div class="field-value">
-							<span class="reported-text">
-							{@html highlightText(entry.reported_details || '—')}
-							</span>
-										</div>
-									</div>
 
                             {#if hasCaseNumber || entry.mdl_number}
                                 <div class="card-field case-details-field">
@@ -1630,7 +1635,7 @@
 						</div>
 					</div>
 				{/if}
-								
+
                                 {#if showNetworks && networkAvailability.get(row.id)}
                                     <div class="related-cards-toggle">
                                         <button class="related-toggle-btn publisher-network-btn" onclick={(event) => { event.stopPropagation(); networkEntity = null; networkRow = row; }}>
@@ -2274,7 +2279,7 @@
 		margin: 0.2rem 0.2rem 0.2rem 0;
 		border: 1px solid #e0e0e0;
 	}
-	
+
 	.type-tags-wrapper {
 		display: flex;
 		flex-wrap: wrap;
@@ -2376,7 +2381,7 @@
 		gap: 0.25rem;
 		align-items: flex-start;
 	}
-	
+
 	.field-item,
 	.field-value,
 	.field-label,
@@ -2416,12 +2421,12 @@
 		align-items: flex-start;
 		margin-bottom: 0;
 	}
-	
+
 	/* Add margin only when publisher-item has children */
 	.publisher-item:has(.affected-publications) {
 		margin-bottom: 0.3rem;
 	}
-	
+
 	/* Reduce margin when publisher-item has hierarchy-intermediate (grandchildren) */
 	.publisher-item:has(.hierarchy-intermediate) {
 		margin-bottom: 0.2rem;
@@ -2443,7 +2448,7 @@
 		padding-top: 0.15rem;
 		border-left: 1.5px solid #e5e5e5;
 	}
-	
+
 	/* Reduce gap when affected-publications contains hierarchy-intermediate (grandchildren) */
 	.affected-publications:has(.hierarchy-intermediate) {
 		gap: 0.1rem;

@@ -81,6 +81,9 @@ export function normalizeData(rawDataArray) {
                 grantees,
                 publications_received_grants: publicationsReceivedGrants,
                 named_organizations: namedOrganizations,
+                organization_previous_names: normalizeObject(row?.['Organization Previous Names']),
+                organization_name_history: normalizeObject(row?.['Organization Name History']),
+                organization_names_at_event_date: normalizeObject(row?.['Organization Names at Event Date']),
                 affected_publications: affectedPublications,
                 parent_child_matches: Array.isArray(row?.['parent_child_matches']) ? row['parent_child_matches'] : [],
                 docket: row?.Docket || null,
@@ -110,4 +113,3 @@ export function normalizeData(rawDataArray) {
         }
     }).filter(row => row !== null);
 }
-
