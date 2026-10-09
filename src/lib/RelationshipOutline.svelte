@@ -3,14 +3,16 @@
  const colors = { lawsuit: '#b4232d', deal: '#21823b', grant: '#1565c0' };
 </script>
 
-{#if types.length}
- <svg class="relationship-outline" viewBox="0 0 100 100" aria-hidden="true">
-  {#each types as type, index (type)}
-   <circle cx="50" cy="50" r="48" pathLength="100" fill="none" stroke={colors[type]} stroke-width="5" vector-effect="non-scaling-stroke" stroke-dasharray={`${100 / types.length} ${100 - 100 / types.length}`} stroke-dashoffset={-index * 100 / types.length} transform="rotate(-90 50 50)" />
-  {/each}
- </svg>
-{/if}
+{#each types as type, index (type)}
+ <span class="relationship-outline" aria-hidden="true" style:inset="{index * 8}px" style:border-color={colors[type]}></span>
+{/each}
 
 <style>
- .relationship-outline { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+ .relationship-outline {
+  position: absolute;
+  border: 8px solid;
+  border-radius: 50%;
+  box-sizing: border-box;
+  pointer-events: none;
+ }
 </style>

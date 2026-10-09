@@ -1,22 +1,50 @@
 <script>
+ import { createEntityNetworkIndex, entityKey, networkEntries, platformConnectionNames } from './entityNetwork.js';
  import RelationshipOutline from './RelationshipOutline.svelte';
  import { isMdlConsolidation } from './mdl.js';
  import { onMount, untrack } from 'svelte';
  import { formatDate } from './utils.js';
- import { publisherNames as names, connectionPublisherNames, normalizeName as normalize, buildOwnershipGraph, ownershipFamily, publisherAndAncestors, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
+ import { publisherNames as names, connectionPublisherNames, normalizeName as normalize, ownershipFamily, publisherAndAncestors, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
  let { row, data = [], onclose, recordCard, entityName = null, entityPlatform = null } = $props();
  const componentId = $props.id();
  const arrowId = `${componentId}-lawsuit-arrow`;
  const mutedArrowId = `${componentId}-lawsuit-arrow-muted`;
  let selectedRecord = $state(null);
  let selectedOrigin = $state(untrack(() => !entityName));
- let selectedPlatform = $state(untrack(() => entityPlatform));
- let selectedPublisher = $state(untrack(() => entityName && !entityPlatform ? normalize(entityName) : null));
- const panelRecords = $derived(selectedKind
-  ? entries.filter(entry => kind(entry) === selectedKind && connectionNodes(entry).length > 0)
+ let focusedEntity = $state(untrack(() => entityName ? {type: entityPlatform ? 'platform' : 'publisher', name: entityPlatform || entityName} : null));
+ let navigationHistory = $state([]);
+ let selectedEntity = $state(untrack(() => entityName ? {type: entityPlatform ? 'platform' : 'publisher', name: entityPlatform || entityName} : null));
+ const selectedPlatform = $derived(selectedEntity?.type === 'platform' ? selectedEntity.name : null);
+ const selectedPublisher = $derived(selectedEntity?.type === 'publisher' ? normalize(selectedEntity.name) : null);
+ const canFocusSelection = $derived(selectedEntity && (!focusedEntity || entityKey(selectedEntity.type, selectedEntity.name) !== entityKey(focusedEntity.type, focusedEntity.name)));
+ function selectEntity(type, name) {
+  clearSelection();
+  selectedEntity = {type, name};
+ }
+ function focusSelection() {
+  if (selectedEntity) navigateTo(selectedEntity.type, selectedEntity.name);
+ }
+ function navigateTo(type, name) {
+  if (focusedEntity && entityKey(type, name) === entityKey(focusedEntity.type, focusedEntity.name)) return;
+  navigationHistory = [...navigationHistory, focusedEntity];
+  clearSelection();
+  platformPositions = new Map();
+  focusedEntity = {type, name};
+  selectedEntity = focusedEntity;
+ }
+ function navigateBack() {
+  if (!navigationHistory.length) return;
+  clearSelection();
+  platformPositions = new Map();
+  focusedEntity = navigationHistory.at(-1);
+  navigationHistory = navigationHistory.slice(0, -1);
+  selectedEntity = focusedEntity;
+ }
+ const selectedRecords = $derived(selectedRecord ? [selectedRecord]
   : selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => selectedPublisherAncestors.has(node.key)))
   : selectedPlatform ? entries.filter(entry => entry.companies.includes(selectedPlatform))
-  : selectedRecord ? [selectedRecord] : []);
+  : focusedEntity || selectedKind ? entries : []);
+ const panelRecords = $derived(selectedKind ? selectedRecords.filter(entry => kinds(entry).includes(selectedKind)) : selectedRecords);
 
  let expanded = $state(false);
  let dialog;
@@ -67,6 +95,11 @@
   cameraX = (viewportWidth - graphBounds.width * mapScale) / 2 - graphBounds.left * mapScale;
   cameraY = (viewportHeight - graphBounds.height * mapScale) / 2 - graphBounds.top * mapScale;
  }
+ $effect(() => {
+  focusedEntity;
+  const frame = requestAnimationFrame(() => untrack(resetCamera));
+  return () => cancelAnimationFrame(frame);
+ });
  function zoomAt(factor, x = viewportWidth / 2, y = viewportHeight / 2) {
   const next = Math.max(.6, Math.min(6, cameraZoom * factor));
   const ratio = next / cameraZoom;
@@ -74,19 +107,16 @@
   cameraY = y - (y - cameraY) * ratio;
   cameraZoom = next;
  }
- function focusCamera(node) {
-  cameraZoom = Math.min(6, Math.max(1, Math.min(viewportWidth, viewportHeight) / (node.r * 2 * mapScale + 80)));
-  cameraX = viewportWidth / 2 - (node.x + node.r) * mapScale * cameraZoom;
-  cameraY = viewportHeight / 2 - (node.y + node.r) * mapScale * cameraZoom;
- }
- const publishers = $derived(entityPlatform ? data.filter(record => [...(record.platform || []), ...(record.defendant || [])].includes(entityPlatform)).flatMap(names) : names(row));
+ const networkIndex = $derived(createEntityNetworkIndex(data));
+ const entityView = $derived(focusedEntity ? networkIndex.query(focusedEntity) : null);
+ const publishers = $derived(entityView ? [...entityView.family].map(key => ownership.get(key)?.name || key) : names(row));
 
  const namedPublishers = $derived(row.organization_publisher_named_in_deal_suit?.length ? row.organization_publisher_named_in_deal_suit : publishers);
- const networkTitle = $derived(entityName || (namedPublishers.length === 1 ? namedPublishers[0] : namedPublishers.slice(0, 3).join(', ') + (namedPublishers.length > 3 ? ` + ${namedPublishers.length - 3} more` : '')));
+ const networkTitle = $derived(focusedEntity?.name || (namedPublishers.length === 1 ? namedPublishers[0] : namedPublishers.slice(0, 3).join(', ') + (namedPublishers.length > 3 ? ` + ${namedPublishers.length - 3} more` : '')));
  const recordContext = $derived(`${(row.interaction || []).join(' / ')} · ${(row.platform?.length ? row.platform : row.defendant || []).join(', ')} · ${formatDate(row.date)}`);
- const ownership = $derived(buildOwnershipGraph(data));
- const family = $derived(new Set(publishers.flatMap(name => [...ownershipFamily(ownership, name)])));
- const relevantRecordIds = $derived(new Set(data.filter(record => !isMdlConsolidation(record) && (!entityPlatform || [...(record.platform || []), ...(record.defendant || [])].includes(entityPlatform)) && names(record).some(name => family.has(normalize(name)))).map(record => record.id)));
+ const ownership = $derived(networkIndex.ownership);
+ const family = $derived(entityView?.family || new Set(publishers.flatMap(name => [...ownershipFamily(ownership, name)])));
+ const viewRecords = $derived(entityView?.records || data.filter(record => !isMdlConsolidation(record) && names(record).some(name => family.has(normalize(name)))));
  const hierarchy = $derived(layoutOwnership(ownership, family));
  const ownershipLinks = $derived.by(() => {
   const keys = new Set(hierarchy.nodes.map(node => node.key));
@@ -138,8 +168,8 @@
  let selectedKind = $state(null);
  let hoveredConnection = $state(null);
  let selectedConnection = $state(null);
- function selectConnection(connection) { if (suppressGraphClick) return; selectedOrigin = false; selectedPublisher = null; selectedPlatform = null; selectedConnection = connection; selectedRecord = connection.entry; }
- function clearSelection() { selectedKind = null; selectedOrigin = false; selectedRecord = null; selectedPublisher = null; selectedPlatform = null; selectedConnection = null; hoveredConnection = null; hoveredPublisher = null; hoveredPlatform = null; }
+ function selectConnection(connection) { if (suppressGraphClick) return; selectedOrigin = false; selectedConnection = connection; selectedRecord = connection.entry; }
+ function clearSelection() { selectedEntity = null; selectedKind = null; selectedOrigin = false; selectedRecord = null; selectedConnection = null; hoveredConnection = null; hoveredPublisher = null; hoveredPlatform = null; }
  let hoveredPublisher = $state(null);
  let hoveredPlatform = $state(null);
  function activeConnection(entry, node = null, company = null) {
@@ -155,7 +185,7 @@
   return false;
  }
  const inheritedAncestorKeys = $derived.by(() => {
-  if (hoveredKind || selectedKind || hoveredPlatform || hoveredConnection) return new Set();
+  if (focusedEntity?.type === 'platform' || hoveredKind || selectedKind || selectedPlatform || hoveredPlatform || hoveredConnection) return new Set();
   const publisher = hoveredPublisher || selectedPublisher;
   if (!publisher) return new Set();
   const ancestors = publisherAndAncestors(ownership, publisher);
@@ -173,7 +203,7 @@
  const connectionNodeIndex = $derived.by(() => {
   const index = new Map();
   for (const entry of entries) {
-   const keys = new Set(connectionPublisherNames(entry).map(normalize));
+   const keys = new Set(platformConnectionNames(entry, ownership).map(normalize));
    index.set(entry.id, [...keys].map(key => nodeByName.get(key)).filter(Boolean));
   }
   return index;
@@ -181,24 +211,8 @@
  function connectionNodes(entry) {
   return connectionNodeIndex.get(entry.id) || [];
  }
- const entries = $derived.by(() => {
-  const groups = new Map();
-  for (const item of data) {
-   if (isMdlConsolidation(item)) continue;
-   if (!relevantRecordIds.has(item.id)) continue;
-   const key = item.lawsuit_id ? `case:${item.lawsuit_id}` : `entry:${item.id}`;
-   const existing = groups.get(key);
-   if (!existing) groups.set(key, { ...item, companies: [...new Set([...(item.platform || []), ...(item.defendant || [])])] });
-   else {
-    const companies = [...new Set([...existing.companies, ...(item.platform || []), ...(item.defendant || [])])];
-    groups.set(key, { ...(String(item.date || '') > String(existing.date || '') ? item : existing), companies });
-   }
-  }
-  return [...groups.values()].sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')));
- });
- const companies = $derived([...new Set(entries
-  .filter(entry => connectionPublisherNames(entry).some(name => family.has(normalize(name))))
-  .flatMap(entry => entry.companies))]);
+ const entries = $derived(networkEntries(viewRecords));
+ const companies = $derived(entityView?.companies || [...new Set(entries.flatMap(entry => entry.companies))]);
  const height = $derived(Math.max(650, Math.sqrt(hierarchy.nodes.length + companies.length) * 130));
  const platformRadius = $derived(Math.max(80, ...companies.map(name => name.length * 13 * .58 / 1.8 + 14)));
  const platformColumns = $derived(Math.max(1, Math.ceil(companies.length * (platformRadius * 2 + 24) / Math.max(1,height - 32))));
@@ -243,6 +257,20 @@
   else if (selectedPublisher) keys.add(selectedPublisher);
   return keys;
  });
+ // Shared routes need separate lanes when the same pair has several interaction types.
+ const connectionLanes = $derived.by(() => {
+  const pairs = new Map();
+  for (const link of drawnConnections) {
+   const key = routeKey(link);
+   if (!pairs.has(key)) pairs.set(key, new Set());
+   pairs.get(key).add(kind(link.entry));
+  }
+  return new Map([...pairs].map(([key, types]) => [key, ['lawsuit', 'deal', 'grant'].filter(type => types.has(type))]));
+ });
+ function laneOffset(connection) {
+  const types = connectionLanes.get(routeKey(connection)) || [];
+  return (types.indexOf(kind(connection.entry)) - (types.length - 1) / 2) * 10 / mapScale;
+ }
  const outlinedDescendants = $derived.by(() => {
   const descendants = new Set();
   const roots = selectedPublisher ? [selectedPublisher] : [...highlightedPublishers];
@@ -386,7 +414,7 @@
 </script>
 
 <dialog class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (!suppressGraphClick && event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
- <header><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}</h2>{#if !entityName}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls"><button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
+ <header><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}</h2>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if canFocusSelection}<button class="resize" onclick={focusSelection} aria-label={`Focus network on ${selectedEntity.name}`}>Focus on {selectedEntity.name}</button>{/if}{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
  <div class="legend" aria-label="Filter relationship types">
@@ -420,19 +448,19 @@
    </marker>
   </defs>
   {#each drawnConnections as connection}
-   <g role="button" tabindex="0" aria-label={`${connection.node.name} — ${connection.entry.interaction.join(' / ')} — ${connection.company}, ${formatDate(connection.entry.date)}`} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredConnection = connection; }} onpointerleave={() => hoveredConnection = null} onfocus={() => hoveredConnection = connection} onblur={() => hoveredConnection = null} onclick={() => selectConnection(connection)} onkeydown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectConnection(connection); } }}>
+   <g transform={`translate(0 ${laneOffset(connection)})`} role="button" tabindex="0" aria-label={`${connection.node.name} — ${connection.entry.interaction.join(' / ')} — ${connection.company}, ${formatDate(connection.entry.date)}`} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredConnection = connection; }} onpointerleave={() => hoveredConnection = null} onfocus={() => hoveredConnection = connection} onblur={() => hoveredConnection = null} onclick={() => selectConnection(connection)} onkeydown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectConnection(connection); } }}>
     <path class="hit-area" d={curve(connection)} />
     <path marker-end={kind(connection.entry) === 'lawsuit' ? `url(#${highlighting && !emphasizedConnection(connection) ? mutedArrowId : arrowId})` : undefined} class={kind(connection.entry)} class:inherited={inheritedConnection(connection)} class:highlighted={emphasizedConnection(connection)} class:muted={highlighting && !emphasizedConnection(connection)} d={curve(connection)} />
    </g>
   {/each}
  </svg>
  {#each displayNodes as node (node.key)}
-  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { hoveredPublisher = null; }} class="ownership-node" class:relationship-outlined={relationshipOutlines.get(node.key)?.length > 0} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><RelationshipOutline types={relationshipOutlines.get(node.key) || []} /><button class="publisher-name" aria-label={node.name} ondblclick={() => focusCamera(node)} onclick={() => { if (suppressGraphClick) return; clearSelection(); selectedPublisher = node.key; }} onfocus={() => hoveredPublisher = node.key} onblur={() => hoveredPublisher = null} >{node.name}</button></div>
+  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { hoveredPublisher = null; }} class="ownership-node" class:relationship-outlined={relationshipOutlines.get(node.key)?.length > 0} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><RelationshipOutline types={relationshipOutlines.get(node.key) || []} /><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => hoveredPublisher = null} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
   <div class="floating-node-label" class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}</div>
  {/each}
- {#each companies as company (company)}<div class="company-node" class:relationship-outlined={relationshipOutlines.get(`platform:${company}`)?.length > 0} class:muted-node={highlighting && !highlightedCompanies.has(company)} class:selected-node={selectedPlatform === company} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><RelationshipOutline types={relationshipOutlines.get(`platform:${company}`) || []} /><button class="platform-name" aria-label={company} ondblclick={() => focusCamera(platformNodes.get(company))} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick || suppressGraphClick) return; clearSelection(); selectedPlatform = company; }} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPlatform = company; }} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
+ {#each companies as company (company)}<div class="company-node" class:relationship-outlined={relationshipOutlines.get(`platform:${company}`)?.length > 0} class:muted-node={highlighting && !highlightedCompanies.has(company)} class:selected-node={selectedPlatform === company} class:hovered-node={hoveredPlatform === company} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><RelationshipOutline types={relationshipOutlines.get(`platform:${company}`) || []} /><button class="platform-name" aria-label={company} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick || suppressGraphClick) return; selectEntity('platform', company); }} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPlatform = company; }} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
  {#each companies as company (company)}
   {@const platform = platformNodes.get(company)}
   <div class="floating-node-label platform-label" class:muted-label={highlighting && !highlightedCompanies.has(company)} style:left="{platform.x + platform.r}px" style:top="{platform.y + platform.r}px" style:font-size="{14 / (mapScale * cameraZoom)}px" style:width="{180 / (mapScale * cameraZoom)}px">{company}</div>
@@ -456,7 +484,7 @@
  .network-heading { min-width:0; }
  h2 { margin:0; font-size:1.4rem; line-height:1.25; font-weight:650; }
  .record-context { margin:.4rem 0 0; font-size:.8rem; color:#555; }
- .window-controls { display:flex; align-items:center; gap:.75rem; flex-shrink:0; }
+ .window-controls { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; flex-shrink:0; }
  .resize { min-height:36px; font:inherit; font-size:.75rem; border:1px solid #ddd; background:#fff; color:#254c6f; padding:.25rem .6rem; cursor:pointer; }
  .close { min-width:40px; min-height:40px; border:0; background:none; font-size:1.2rem; cursor:pointer; }
  .routing-status { margin:0 0 .5rem; font-size:.8rem; color:#555; }
@@ -481,12 +509,12 @@
  .ownership-node.parent-circle { background:#f2f2f2; }
  .ownership-node.parent-circle.alt { background:#e5e5e5; }
  .company-node { z-index:30; background:#e8f2fb; border-color:#6b8fae; }
- .ownership-node.selected-node,.ownership-node.selected-node.parent-circle.alt,.company-node.selected-node { background:#fff5c4; border:2px solid #b89a35; }
- .ownership-node.selected-node,.company-node.selected-node { opacity:1; }
+ .ownership-node.selected-node,.ownership-node.selected-node.parent-circle.alt,.company-node.selected-node,.ownership-node.hovered-node,.ownership-node.hovered-node.parent-circle.alt,.company-node.hovered-node { background:#fff5c4; border:2px solid #b89a35; }
+ .ownership-node.selected-node,.company-node.selected-node,.ownership-node.hovered-node,.company-node.hovered-node { opacity:1; }
  .ownership-node.relationship-outlined,.company-node.relationship-outlined { border-color:transparent; }
  .ownership-node.muted-node,.company-node.muted-node { opacity:.8; }
  .ownership-node.outlined-descendant.muted-node { opacity:1; background:transparent; border-color:#777; }
- .publisher-name,.platform-name { width:100%; height:100%; padding:0; border:0; background:none; color:transparent; font-size:0; cursor:pointer; user-select:none; }
+ .publisher-name,.platform-name { border-radius:50%; width:100%; height:100%; padding:0; border:0; background:none; color:transparent; font-size:0; cursor:pointer; user-select:none; }
  .platform-name { cursor:grab; touch-action:none; }
  .platform-name:active { cursor:grabbing; }
  .publisher-name:focus-visible,.platform-name:focus-visible { outline:2px solid #254c6f; outline-offset:-4px; }
