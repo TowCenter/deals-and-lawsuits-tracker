@@ -1,6 +1,7 @@
 <script>
  import { createEntityNetworkIndex, entityKey, networkEntries, platformConnectionNames } from './entityNetwork.js';
  import { layoutVennNetwork } from './vennNetwork.js';
+ import { groupNetworkConnections } from './networkConnectionGroups.js';
  import RelationshipOutline from './RelationshipOutline.svelte';
  import { isMdlConsolidation } from './mdl.js';
  import { onMount, untrack } from 'svelte';
@@ -47,7 +48,7 @@
   navigationHistory = navigationHistory.slice(0, -1);
   selectedEntity = focusedEntity;
  }
- const selectedRecords = $derived(selectedRecord ? [selectedRecord]
+ const selectedRecords = $derived(selectedConnection?.records ? selectedConnection.records : selectedRecord ? [selectedRecord]
   : selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => selectedPublisherAncestors.has(node.key)))
   : selectedPlatform ? entries.filter(entry => entry.companies.includes(selectedPlatform))
   : focusedEntity || selectedKind ? entries : []);
@@ -188,7 +189,12 @@
  let selectedKind = $state(null);
  let hoveredConnection = $state(null);
  let selectedConnection = $state(null);
- function selectConnection(connection) { if (suppressGraphClick) return; selectedOrigin = false; selectedConnection = connection; selectedRecord = connection.entry; }
+ function selectConnection(connection) {
+  if (suppressGraphClick) return;
+  clearSelection();
+  selectedConnection = connection;
+  selectedRecord = connection.entry;
+ }
  function clearSelection() { selectedEntity = null; selectedOrigin = false; selectedRecord = null; selectedConnection = null; hoveredConnection = null; hoveredPublisher = null; hoveredPlatform = null; }
  let hoveredPublisher = $state(null);
  let hoveredPlatform = $state(null);
@@ -287,15 +293,8 @@
   }
   return new Map([...outlines].map(([key, types]) => [key, ['lawsuit', 'deal', 'grant'].filter(type => types.has(type))]));
  });
- const drawnConnections = $derived.by(() => {
-  const groups = new Map();
-  for (const connection of connections) {
-   const key = JSON.stringify([connection.node.key,connection.company,kind(connection.entry)]);
-   const existing = groups.get(key);
-   if (!existing || (!activeConnection(existing.entry,existing.node,existing.company) && activeConnection(connection.entry,connection.node,connection.company))) groups.set(key,connection);
-  }
-  return [...groups.values()].sort((a,b) => Number(emphasizedConnection(a)) - Number(emphasizedConnection(b)));
- });
+ const drawnConnections = $derived(groupNetworkConnections(connections,kind,activeConnection)
+  .sort((a,b)=>Number(emphasizedConnection(a))-Number(emphasizedConnection(b))));
  const highlightedPublishers = $derived.by(() => {
   const keys = new Set(connections.filter(link => activeConnection(link.entry, link.node, link.company)).map(link => link.node.key));
   if (hoveredPublisher) keys.add(hoveredPublisher);
@@ -386,6 +385,16 @@
   } catch {fallback();}
   return ()=>{cancelled=true;worker?.terminate();clearTimeout(fallbackTimer);};
  });
+ function positionCountBadge(element, value) {
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  function update(next) {
+   path.setAttribute('d',next.path);
+   const point=path.getPointAtLength(path.getTotalLength()/2);
+   element.setAttribute('transform',`translate(${point.x} ${point.y})`);
+  }
+  update(value);
+  return {update};
+ }
  function curve(connection) {
   if (!clusteredLayout) return routedPaths.get(routeKey(connection)) || '';
   const source = connection.node, target = platformNodes.get(connection.company);
@@ -470,7 +479,7 @@
 </script>
 
 <dialog class:clustered={showVenn} class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (!suppressGraphClick && event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
- <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle">Interactions with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if focusedEntity?.type === 'platform'}<button class="resize" aria-pressed={showVenn} onclick={() => preferVenn = !preferVenn}>{showVenn ? "Network view" : "Venn network"}</button>{/if}{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
+ <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle"><strong><em>Publicly disclosed</em></strong> interactions with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if focusedEntity?.type === 'platform'}<button class="resize" aria-pressed={showVenn} onclick={() => preferVenn = !preferVenn}>{showVenn ? "Network view" : "Venn network"}</button>{/if}{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
 
@@ -488,9 +497,15 @@
    {@const compactTitle = region.r * mapScale * cameraZoom < 80}
    {@const labelFont = (compactTitle ? 12 : 14) / (mapScale * cameraZoom)}
    {@const labelGap = Math.min(region.r * 1.5, (region.label.length * .56 + .6) * labelFont)}
-   <circle class="venn-outline" cx={region.x} cy={region.y} r={region.r} style:stroke={region.color} style:stroke-width="{Math.max(2 / (mapScale * cameraZoom), region.r * 0.012)}px" stroke-dasharray={`${2*Math.PI*region.r-labelGap} ${labelGap}`} stroke-dashoffset={-labelGap/2} transform={`rotate(${region.type === 'grant' ? 90 : -90} ${region.x} ${region.y})`} fill="none" pointer-events="none" />
-   <defs><path id={`${componentId}-label-${region.type}`} d={`M ${region.x-region.r} ${region.y} A ${region.r} ${region.r} 0 0 ${region.type === 'grant' ? 0 : 1} ${region.x+region.r} ${region.y}`} /></defs>
-   <text class="venn-title" class:compact-title={compactTitle} style:font-size="{labelFont}px" fill={region.color} text-anchor="middle" dominant-baseline="central"><textPath href={`#${componentId}-label-${region.type}`} startOffset="50%">{region.label}</textPath></text>
+   <circle class="venn-outline" cx={region.x} cy={region.y} r={region.r} style:stroke={region.color} style:stroke-width="{Math.max(2 / (mapScale * cameraZoom), region.r * 0.012)}px" stroke-dasharray={selectedKind ? undefined : `${2*Math.PI*region.r-labelGap} ${labelGap}`} stroke-dashoffset={selectedKind ? undefined : -labelGap/2} transform={`rotate(${region.type === 'grant' ? 90 : -90} ${region.x} ${region.y})`} fill="none" pointer-events="none" />
+   {#if !selectedKind}
+    {#if compactTitle}
+     <text class="venn-title compact-title" x={region.x} y={region.y+(region.type === 'grant' ? region.r : -region.r)} style:font-size="{labelFont}px" fill={region.color} text-anchor="middle" dominant-baseline="central">{region.label}</text>
+    {:else}
+     <defs><path id={`${componentId}-label-${region.type}`} d={`M ${region.x-region.r} ${region.y} A ${region.r} ${region.r} 0 0 ${region.type === 'grant' ? 0 : 1} ${region.x+region.r} ${region.y}`} /></defs>
+     <text class="venn-title" style:font-size="{labelFont}px" fill={region.color} text-anchor="middle" dominant-baseline="central"><textPath href={`#${componentId}-label-${region.type}`} startOffset="50%">{region.label}</textPath></text>
+    {/if}
+   {/if}
 
   {/each}
   <defs>
@@ -502,10 +517,16 @@
    </marker>
   </defs>
   {#if !showVenn}
-  {#each drawnConnections as connection}
+  {#each drawnConnections as connection, index (connection.key)}
    <g transform={`translate(0 ${laneOffset(connection)})`} role="button" tabindex="0" aria-label={`${connection.node.name} — ${connection.entry.interaction.join(' / ')} — ${connection.company}, ${formatDate(connection.entry.date)}`} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredConnection = connection; }} onpointerleave={() => hoveredConnection = null} onfocus={() => hoveredConnection = connection} onblur={() => hoveredConnection = null} onclick={() => selectConnection(connection)} onkeydown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectConnection(connection); } }}>
     <path class="hit-area" d={curve(connection)} />
-    <path marker-end={kind(connection.entry) === 'lawsuit' ? `url(#${highlighting && !emphasizedConnection(connection) ? mutedArrowId : arrowId})` : undefined} class={kind(connection.entry)} class:inherited={inheritedConnection(connection)} class:highlighted={emphasizedConnection(connection)} class:muted={highlighting && !emphasizedConnection(connection)} d={curve(connection)} />
+    <path id={`${componentId}-connection-${index}`} marker-end={kind(connection.entry) === 'lawsuit' ? `url(#${highlighting && !emphasizedConnection(connection) ? mutedArrowId : arrowId})` : undefined} class={kind(connection.entry)} class:inherited={inheritedConnection(connection)} class:highlighted={emphasizedConnection(connection)} class:muted={highlighting && !emphasizedConnection(connection)} d={curve(connection)} />
+    {#if connection.count > 1 && curve(connection)}
+     <g class="connection-badge" class:muted-count={highlighting && !emphasizedConnection(connection)} use:positionCountBadge={{path:curve(connection)}}>
+      <rect x={-(String(connection.count).length*7+12)/(2*mapScale*cameraZoom)} y={-10/(mapScale*cameraZoom)} width={(String(connection.count).length*7+12)/(mapScale*cameraZoom)} height={20/(mapScale*cameraZoom)} rx={5/(mapScale*cameraZoom)} fill={kind(connection.entry) === 'lawsuit' ? '#b4232d' : kind(connection.entry) === 'grant' ? '#1565c0' : '#21823b'} />
+      <text class="connection-count" style:font-size="{12 / (mapScale * cameraZoom)}px" fill="#fff" text-anchor="middle" dominant-baseline="central">{connection.count}</text>
+     </g>
+    {/if}
    </g>
   {/each}
   {/if}
@@ -580,7 +601,10 @@
  .clustered .ownership-node,.clustered .company-node { opacity:1; }
  .clustered .floating-node-label { font-weight:500; }
  .venn-title { font-family:inherit; font-weight:600; letter-spacing:.025em; pointer-events:none; }
- .venn-title.compact-title { letter-spacing:normal; font-weight:500; }
+ .venn-title.compact-title { letter-spacing:normal; font-weight:500; stroke:#fff; stroke-width:3px; paint-order:stroke; stroke-linejoin:round; }
+ .connection-count { font-family:inherit; font-weight:600; pointer-events:none; }
+ .connection-badge { pointer-events:none; }
+ .connection-badge.muted-count { opacity:.3; }
  .graph-column { min-width:0; }
  .focus-action { display:flex; justify-content:center; padding:.75rem 0; }
  .focus-action button { font:inherit; font-size:.85rem; font-weight:500; color:#254c6f; background:#fff; border:1px solid #cbd5de; border-radius:4px; padding:.45rem .85rem; min-height:36px; cursor:pointer; }
@@ -643,6 +667,7 @@
  path.grant.muted { stroke:#dce9f6; }
  path.hit-area { stroke:transparent; stroke-width:12; pointer-events:stroke; }
  .selected-record { min-width:0; max-height:65dvh; overflow:auto; }
+ .selected-record :global(.card.collapsed .header-status) { display:none; }
  dialog.expanded .selected-record { max-height:calc(100dvh - 210px); }
  .selected-record :global(.card-content) { display:flex!important; flex-direction:column!important; }
  .selected-record :global(.card-column.column-1) { padding:0 0 1rem!important; border-right:0; border-bottom:1px solid #ddd; }

@@ -74,3 +74,20 @@ test('all seven relationship combinations have unique nodes contained by their c
   }
  }
 });
+
+test('filter retains ownership descendants around matching organizations',()=>{
+ const layout=layoutVennNetwork({type:'platform',name:'OpenAI'},entries,buildOwnershipGraph(entries),'grant');
+ const parent=layout.nodes.find(node=>node.key==='parent');
+ const child=layout.nodes.find(node=>node.key==='child');
+ assert(parent.hasChildren);
+ assert(child);
+ assert(Math.hypot(child.x+child.r-parent.x-parent.r,child.y+child.r-parent.y-parent.r)+child.r<=parent.r+.001);
+ assert(!layout.nodes.some(node=>node.key==='other'));
+});
+
+test('disjoint relationship circles do not overlap due to label padding',()=>{
+ const records=[['Lawsuit','Deal'],['Lawsuit','Grant']].map((interaction,index)=>({id:index,interaction,organization_publisher_named_in_deal_suit:[`Publisher ${index}`],companies:['OpenAI']}));
+ const layout=layoutVennNetwork({type:'platform',name:'OpenAI'},records,buildOwnershipGraph(records));
+ const deal=layout.circles.find(circle=>circle.type==='deal'), grant=layout.circles.find(circle=>circle.type==='grant');
+ assert(Math.hypot(deal.x-grant.x,deal.y-grant.y)>=deal.r+grant.r);
+});

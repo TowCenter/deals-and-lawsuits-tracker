@@ -18,13 +18,8 @@ export function layoutVennNetwork(focus, entries, ownership, filter = null) {
  }
  if (filter) for (const [key,entity] of entities) if (!entity.types.has(filter)) entities.delete(key);
  const counts = Object.fromEntries(['lawsuit','deal','grant'].map(type=>[type,[...entities.values()].filter(entity=>entity.types.has(type)).length]));
- const prune = tree => {
-  const children=(tree.children || []).map(prune).filter(Boolean);
-  if (!tree.ownTypes?.has(filter) && !children.length) return null;
-  return {...tree,children:children.length ? children : undefined};
- };
- const families = focus.type === 'platform' ? vennOwnershipFamilies(entities,ownership) : [...entities.values()];
- const trees = filter && focus.type === 'platform' ? families.map(prune).filter(Boolean) : families;
+ // Filter direct participants, then retain their ownership families as context.
+ const trees = focus.type === 'platform' ? vennOwnershipFamilies(entities,ownership) : [...entities.values()];
  const groups = new Map();
  for (const tree of trees) {
   const key = [...tree.types].sort().join('|');
@@ -42,8 +37,14 @@ export function layoutVennNetwork(focus, entries, ownership, filter = null) {
  for (const items of groups.values()) prepare(items,0,0);
  const ordered = [...groups.keys()];
  const gap = 28;
- const largest = Math.max(60,...jobs.map(job=>job.root.r));
- const anchors = {lawsuit:{x:0,y:0},deal:{x:largest*2+gap,y:0},grant:{x:largest+gap/2,y:largest*1.75+gap}};
+ const radiusFor = type => jobs[ordered.indexOf(type)]?.root.r || 60;
+ const lawsuitRadius=radiusFor('lawsuit'), dealRadius=radiusFor('deal'), grantRadius=radiusFor('grant');
+ const horizontal=lawsuitRadius+dealRadius+gap;
+ const fromLawsuits=lawsuitRadius+grantRadius+gap;
+ const fromDeals=dealRadius+grantRadius+gap;
+ const grantX=(horizontal**2+fromLawsuits**2-fromDeals**2)/(2*horizontal);
+ const grantY=Math.sqrt(Math.max(0,fromLawsuits**2-grantX**2));
+ const anchors={lawsuit:{x:0,y:0},deal:{x:horizontal,y:0},grant:{x:grantX,y:grantY}};
  // Exclusive groups sit outside, while shared groups sit between their categories.
  for (let i=0;i<jobs.length;i++) {
   const types = ordered[i].split('|');
@@ -62,14 +63,36 @@ export function layoutVennNetwork(focus, entries, ownership, filter = null) {
   }
  }
  const styles = {lawsuit:{label:'Lawsuits',color:'#b4232d'},deal:{label:'Deals',color:'#21823b'},grant:{label:'Grants',color:'#1565c0'}};
- const circles = Object.keys(styles).filter(type=>counts[type]).map(type=>{
+ const makeCircles = () => Object.keys(styles).filter(type=>counts[type]).map(type=>{
   const members=jobs.filter((job,index)=>ordered[index].split('|').includes(type));
   const weight=members.reduce((sum,job)=>sum+job.root.r**2,0);
   const x=members.reduce((sum,job)=>sum+job.cx*job.root.r**2,0)/weight;
   const y=members.reduce((sum,job)=>sum+job.cy*job.root.r**2,0)/weight;
-  const r=Math.max(...members.map(job=>Math.hypot(job.cx-x,job.cy-y)+job.root.r))+24;
+  const r=Math.max(Math.max(...members.map(job=>Math.hypot(job.cx-x,job.cy-y)+job.root.r))+24, Math.max(0,...jobs.map(job=>job.root.r))*0.14);
   return {type,...styles[type],x,y,r,count:counts[type]};
  });
+ let circles=makeCircles();
+ // Padding and minimum title sizes must not create overlaps between disjoint sets.
+ for (let iteration=0;iteration<60;iteration++) {
+  let moved=false;
+  for (let i=0;i<circles.length;i++) for (let j=i+1;j<circles.length;j++) {
+   const a=circles[i], b=circles[j];
+   if (ordered.some(key=>key.split('|').includes(a.type) && key.split('|').includes(b.type))) continue;
+   const dx=b.x-a.x, dy=b.y-a.y, distance=Math.hypot(dx,dy);
+   const required=a.r+b.r+12;
+   if (distance>=required-.01) continue;
+   const ux=distance ? dx/distance : 1, uy=distance ? dy/distance : 0;
+   const shift=(required-distance)/2;
+   jobs.forEach((job,index)=>{
+    const types=ordered[index].split('|');
+    if (types.includes(a.type)) {job.cx-=ux*shift;job.cy-=uy*shift;}
+    if (types.includes(b.type)) {job.cx+=ux*shift;job.cy+=uy*shift;}
+   });
+   moved=true;
+  }
+  if (!moved) break;
+  circles=makeCircles();
+ }
  const right=Math.max(0,...circles.map(circle=>circle.x+circle.r));
  const centerY=circles.length ? (Math.min(...circles.map(circle=>circle.y-circle.r))+Math.max(...circles.map(circle=>circle.y+circle.r)))/2 : 0;
  if (focus.type === 'publisher') {
