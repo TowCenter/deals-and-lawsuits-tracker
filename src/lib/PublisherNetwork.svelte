@@ -14,7 +14,8 @@
  let selectedOrigin = $state(untrack(() => !entityName));
  let focusedEntity = $state(untrack(() => entityName ? {type: entityPlatform ? 'platform' : 'publisher', name: entityPlatform || entityName} : null));
  let navigationHistory = $state([]);
- let showVenn = $state(untrack(() => Boolean(entityPlatform)));
+ let preferVenn = $state(true);
+ const showVenn = $derived(focusedEntity?.type === 'platform' && preferVenn);
  let selectedEntity = $state(untrack(() => entityName ? {type: entityPlatform ? 'platform' : 'publisher', name: entityPlatform || entityName} : null));
  const selectedPlatform = $derived(selectedEntity?.type === 'platform' ? selectedEntity.name : null);
  const selectedPublisher = $derived(selectedEntity?.type === 'publisher' ? normalize(selectedEntity.name) : null);
@@ -33,7 +34,7 @@
   selectedKind = null;
   platformPositions = new Map();
   focusedEntity = {type, name};
-  showVenn = type === 'platform';
+  preferVenn = true;
   selectedEntity = focusedEntity;
  }
  function navigateBack() {
@@ -42,7 +43,7 @@
   selectedKind = null;
   platformPositions = new Map();
   focusedEntity = navigationHistory.at(-1);
-  showVenn = focusedEntity?.type === 'platform';
+  preferVenn = true;
   navigationHistory = navigationHistory.slice(0, -1);
   selectedEntity = focusedEntity;
  }
@@ -469,7 +470,7 @@
 </script>
 
 <dialog class:clustered={showVenn} class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (!suppressGraphClick && event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
- <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle">Interactions with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if focusedEntity}<button class="resize" aria-pressed={showVenn} onclick={() => showVenn = !showVenn}>{showVenn ? "Network view" : "Venn network"}</button>{/if}{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
+ <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle">Interactions with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if focusedEntity?.type === 'platform'}<button class="resize" aria-pressed={showVenn} onclick={() => preferVenn = !preferVenn}>{showVenn ? "Network view" : "Venn network"}</button>{/if}{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
 
