@@ -414,7 +414,7 @@
 </script>
 
 <dialog class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (!suppressGraphClick && event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
- <header><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}</h2>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if canFocusSelection}<button class="resize" onclick={focusSelection} aria-label={`Focus network on ${selectedEntity.name}`}>Focus on {selectedEntity.name}</button>{/if}{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
+ <header><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}</h2>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
  <div class="legend" aria-label="Filter relationship types">
@@ -434,6 +434,7 @@
  {#if routing}<p class="routing-status" role="status">Drawing connections…</p>{/if}
  {#if routingError}<p class="routing-status" role="alert">Connections could not be drawn. Close and reopen the network to retry.</p>{/if}
  <div class="network-content" class:has-selection={panelRecords.length > 0}>
+ <div class="graph-column">
  <!-- This application surface deliberately handles pan/zoom and implements its documented keyboard controls. -->
  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
  <div class="scroll" role="application" tabindex="0" aria-label="Relationship graph. Drag to pan, pinch to zoom. Keyboard: arrows to pan, plus or minus to zoom, Home to fit." onkeydown={handleMapKey} bind:this={mapViewport} onwheel={event => { event.preventDefault(); const bounds = mapViewport.getBoundingClientRect(); zoomAt(event.deltaY < 0 ? 1.12 : 1/1.12, event.clientX-bounds.left, event.clientY-bounds.top); }} onpointerdown={beginGesture} onclickcapture={handleMapClick}><div class="scaled-area" style:width="{graphWidth * mapScale}px" style:height="{height * mapScale}px"><div class="map" style:width="{graphWidth}px" style:height="{height}px" style:transform="translate({cameraX}px, {cameraY}px) scale({mapScale * cameraZoom})">
@@ -466,6 +467,10 @@
   <div class="floating-node-label platform-label" class:muted-label={highlighting && !highlightedCompanies.has(company)} style:left="{platform.x + platform.r}px" style:top="{platform.y + platform.r}px" style:font-size="{14 / (mapScale * cameraZoom)}px" style:width="{180 / (mapScale * cameraZoom)}px">{company}</div>
  {/each}
  </div></div></div>
+ {#if canFocusSelection}
+  <div class="focus-action"><button onclick={focusSelection}>Focus on {selectedEntity.name} →</button></div>
+ {/if}
+ </div>
 
  {#if panelRecords.length}
   <section class="selected-record" aria-label="Selected record" aria-live="polite">
@@ -484,6 +489,11 @@
  .network-heading { min-width:0; }
  h2 { margin:0; font-size:1.4rem; line-height:1.25; font-weight:650; }
  .record-context { margin:.4rem 0 0; font-size:.8rem; color:#555; }
+ .graph-column { min-width:0; }
+ .focus-action { display:flex; justify-content:center; padding:.75rem 0; }
+ .focus-action button { font:inherit; font-weight:600; color:#254c6f; background:#fff5c4; border:1px solid #b89a35; border-radius:4px; padding:.65rem 1rem; min-height:44px; cursor:pointer; }
+ .focus-action button:hover { background:#ffed9a; }
+ .focus-action button:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
  .window-controls { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; flex-shrink:0; }
  .resize { min-height:36px; font:inherit; font-size:.75rem; border:1px solid #ddd; background:#fff; color:#254c6f; padding:.25rem .6rem; cursor:pointer; }
  .close { min-width:40px; min-height:40px; border:0; background:none; font-size:1.2rem; cursor:pointer; }
