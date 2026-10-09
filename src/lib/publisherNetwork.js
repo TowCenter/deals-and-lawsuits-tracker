@@ -1,16 +1,17 @@
 import { hierarchy, pack } from 'd3-hierarchy';
 
 export const normalizeName = name => String(name || '').trim().toLowerCase();
+const namedNetworkEntity = name => Boolean(normalizeName(name)) && normalizeName(name) !== '(unknown)';
 // Grant coverage is a platform relationship, independent of ownership or card grouping.
 export function connectionPublisherNames(row) {
  const names = [...(row.organization_publisher_named_in_deal_suit || [])];
  if ((row.interaction || []).some(kind => String(kind).toLowerCase() === 'grant')) {
   names.push(...(row.grantees || []), ...(row.publications_received_grants || []), ...(row.affected_publications || []));
  }
- return [...new Map(names.filter(Boolean).map(name => [normalizeName(name), name])).values()];
+ return [...new Map(names.filter(namedNetworkEntity).map(name => [normalizeName(name), name])).values()];
 }
 export function publisherNames(row) {
- return [...new Set([...connectionPublisherNames(row), ...(row.publishers || []), ...(row.affected_publications || [])].filter(Boolean))];
+ return [...new Set([...connectionPublisherNames(row), ...(row.publishers || []), ...(row.affected_publications || [])].filter(namedNetworkEntity))];
 }
 
 // Join ownership lineages across all records; never infer ownership from co-participation.
@@ -20,14 +21,14 @@ export function buildOwnershipGraph(data) {
  const graph = new Map();
  const add = name => {
   const key = normalizeName(name);
-  if (!key) return null;
+  if (!namedNetworkEntity(name)) return null;
   if (!graph.has(key)) graph.set(key, { name: String(name).trim(), neighbors: new Set(), children: new Set() });
   return key;
  };
  for (const row of data) {
   for (const name of publisherNames(row)) add(name);
   for (const match of row.parent_child_matches || []) {
-   const lineage = Array.isArray(match.lineage) ? match.lineage.filter(name => normalizeName(name)) : [];
+   const lineage = Array.isArray(match.lineage) ? match.lineage.filter(namedNetworkEntity) : [];
    for (let i = 0; i < lineage.length; i++) {
     const key = add(lineage[i]);
     if (!i) continue;
