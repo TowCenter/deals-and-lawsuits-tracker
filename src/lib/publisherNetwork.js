@@ -155,8 +155,7 @@ export function routeCircleConnection(source, target, circles, width, height, re
  const a=center(source),b=center(target),padding=retry ? 0 : Math.min(8, source.r*.15) + (lane ? 12 + lane : 0);
  const arrivalY=b.y+Math.max(-target.r*.6,Math.min(target.r*.6,lane));
  const end={x:b.x-Math.sqrt(target.r**2-(arrivalY-b.y)**2),y:arrivalY};
- const terminalLength=Math.min(24,target.r*.4);
- const arrival={x:end.x-terminalLength,y:end.y};
+
  // Ancestor boundaries enclose the source; crossing them is necessary to exit.
  const candidates=circles.filter(node=>node.key!==source.key&&node.key!==target.key)
   .filter(node=> {
@@ -172,6 +171,16 @@ export function routeCircleConnection(source, target, circles, width, height, re
   const c=center(node);
   if(!obstacles.some(parent=>Math.hypot(c.x-center(parent).x,c.y-center(parent).y)+node.r<=parent.r+.001))obstacles.push(node);
  }
+ // Fit the horizontal approach into the gap before the destination.
+ // A full-length approach can land on the preceding platform's boundary.
+ let terminalLength=Math.min(24,target.r*.4);
+ for(const node of obstacles){
+  const c=center(node),radius=node.r+padding,dy=end.y-c.y;
+  if(Math.abs(dy)>=radius)continue;
+  const right=c.x+Math.sqrt(radius**2-dy**2);
+  if(right<end.x)terminalLength=Math.min(terminalLength,(end.x-right)/2);
+ }
+ const arrival={x:end.x-terminalLength,y:end.y};
  obstacles.push(target);
  const blocked=(x,y)=>obstacles.some(node=>Math.hypot(x-center(node).x,y-center(node).y)<node.r+(node.key===target.key ? 0 : padding));
  // Prefer a single gentle curve when it clears the ownership circles.

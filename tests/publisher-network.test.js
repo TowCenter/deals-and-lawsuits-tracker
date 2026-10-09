@@ -85,3 +85,17 @@ test('unobstructed connections use one gentle curve with endpoints on node bound
   assert(Math.abs(Math.hypot(x-520,y-120)-60)<.001);
  }
 });
+
+ test('all four platforms keep routes in a two-column layout across canvas widths',()=>{
+ const family=[{key:'nyt',name:'The New York Times Company'},...Array.from({length:5},(_,i)=>({key:`child${i}`,name:`Publication ${i}`}))];
+ for(const width of [1000,1100,1200,1300,1400,1500,1600,1800,2000]){
+  const nodes=layoutCirclePacking(family,family.slice(1).map(node=>['nyt',node.key]),width,650,['Perplexity','OpenAI','Microsoft','Amazon']);
+  for(const target of nodes.filter(node=>node.key.startsWith('platform:'))){
+   const path=routeCircleConnection(nodes[0],target,nodes,width,650);
+   assert(path && !path.includes('NaN'),`missing ${target.name} at width ${width}`);
+   const values=path.match(/-?\d+(?:\.\d+)?/g).map(Number);
+   assert.equal(values.at(-3),values.at(-1));
+   assert.deepEqual(values.slice(-2),[target.x,target.y+target.r]);
+  }
+ }
+});
