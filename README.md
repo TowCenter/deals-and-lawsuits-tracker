@@ -111,4 +111,8 @@ MIT
 - `publisherNetwork.js` and its worker handle ownership, layout and routing.
 - `trackerData.js` normalizes the dataset before it reaches UI components.
 
+Platforms use the Venn view; publishers use the network view. Clicking a node selects its interaction cards without changing the focused entity. “Explore this node” navigates to that entity's view, and Back restores the previous entity. Relationship filters remain active during selection and reset during navigation. The explore action shares one snippet for publisher and platform labels.
+
+`vennNetwork.js` caches deterministic geometry by immutable records, ownership map, entity and filter; `vennOwnership.js` preserves ownership context around filtered participants. The modal is measured and fitted before it becomes visible. Resize callbacks only refit when dimensions change, and stale callbacks cannot reveal an outdated fit.
+
 Dataset arrays are treated as immutable snapshots; replace the array when data changes so cached indexes and layouts are refreshed. Run `npm test`, `npm run check` and `npm run build` after changes.

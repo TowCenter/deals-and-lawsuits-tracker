@@ -14,8 +14,7 @@
  let selectedOrigin = $state(untrack(() => !entityName));
  let focusedEntity = $state(untrack(() => entityName ? {type: entityPlatform ? 'platform' : 'publisher', name: entityPlatform || entityName} : null));
  let navigationHistory = $state([]);
- let preferVenn = $state(true);
- const showVenn = $derived(focusedEntity?.type === 'platform' && preferVenn);
+ const showVenn = $derived(focusedEntity?.type === 'platform');
  let selectedEntity = $state(untrack(() => entityName ? {type: entityPlatform ? 'platform' : 'publisher', name: entityPlatform || entityName} : null));
  const selectedPlatform = $derived(selectedEntity?.type === 'platform' ? selectedEntity.name : null);
  const selectedPublisher = $derived(selectedEntity?.type === 'publisher' ? normalize(selectedEntity.name) : null);
@@ -34,7 +33,6 @@
   selectedKind = null;
   platformPositions = new Map();
   focusedEntity = {type, name};
-  preferVenn = true;
   selectedEntity = focusedEntity;
  }
  function navigateBack() {
@@ -43,7 +41,6 @@
   selectedKind = null;
   platformPositions = new Map();
   focusedEntity = navigationHistory.at(-1);
-  preferVenn = true;
   navigationHistory = navigationHistory.slice(0, -1);
   selectedEntity = focusedEntity;
  }
@@ -141,16 +138,16 @@
   const node = platformNodes.get(company);
   draggingPlatform = {company, startX:event.clientX, startY:event.clientY, x:node.x, y:node.y, moved:false};
  }
- const clusteredLayout = $derived(showVenn && focusedEntity ? layoutVennNetwork(focusedEntity, entries, ownership, selectedKind) : null);
+ const vennLayout = $derived(showVenn && focusedEntity ? layoutVennNetwork(focusedEntity, entries, ownership, selectedKind) : null);
  const graphNodes = $derived.by(() => {
-  const packed=clusteredLayout?.nodes || layoutCirclePacking(hierarchy.nodes,ownershipLinks,graphWidth,height,companies);
+  const packed=vennLayout?.nodes || layoutCirclePacking(hierarchy.nodes,ownershipLinks,graphWidth,height,companies);
   if(!platformPositions.size)return packed;
   return packed.map(node => {
   const position = platformPositions.get(node.name);
   return node.key.startsWith('platform:') && position ? {...node, x:Math.max(0, Math.min(graphWidth-node.width,position.x)), y:Math.max(0,Math.min(height-node.height,position.y))} : node;
   });
  });
- const renderedNodes = $derived(graphNodes.filter(node => !showVenn || !focusedEntity || node.key !== (focusedEntity.type === 'platform' ? `platform:${focusedEntity.name}` : normalize(focusedEntity.name))));
+ const renderedNodes = $derived(graphNodes.filter(node => !showVenn || !focusedEntity || node.key !== `platform:${focusedEntity.name}`));
  const displayNodes = $derived(renderedNodes.filter(node => !node.key.startsWith('platform:')));
  const renderedCompanies = $derived(renderedNodes.filter(node=>node.key.startsWith('platform:')).map(node=>node.name));
  const visibleLabels = $derived.by(() => {
@@ -159,12 +156,12 @@
    const priority = node => node.key === hoveredPublisher ? 4 : node.key === selectedPublisher ? 3 : node.depth === 0 || node.width*scale >= 130 ? 2 : 1;
    return priority(b)-priority(a) || b.r-a.r || a.key.localeCompare(b.key);
   });
-  const labels = [], boxes = (clusteredLayout?.headings || []).map(heading => {
+  const labels = [], boxes = (vennLayout?.headings || []).map(heading => {
     const width = heading.label.length * 14 * .58 / scale;
     return {left:heading.x-width/2-8/scale,right:heading.x+width/2+8/scale,top:heading.y-16/scale,bottom:heading.y+10/scale};
    });
   for (const node of candidates) {
-   const isHovered = node.key === hoveredPublisher;
+   const isActiveLabel = node.key === hoveredPublisher || node.key === selectedPublisher;
    if (node.key !== hoveredPublisher && node.key !== selectedPublisher && !(focusedEntity?.type === 'publisher' && node.key === normalize(focusedEntity.name))) continue;
    const font = 14 / scale;
    const width = Math.min(node.name.length * font * .58 + font, 180 / scale);
@@ -174,10 +171,10 @@
    const viewportLeft = -cameraX / scale;
    const viewportRight = (viewportWidth - cameraX) / scale;
    x = Math.max(viewportLeft+width/2+8/scale, Math.min(viewportRight-width/2-8/scale,x));
-   let y = node.hasChildren && !isHovered ? node.y+(node.labelInset||0) : node.y+node.r;
-   if (isHovered) y = Math.max((-cameraY+8)/scale+height/2, Math.min((viewportHeight-cameraY-8)/scale-height/2,y));
+   let y = node.hasChildren && !isActiveLabel ? node.y+(node.labelInset||0) : node.y+node.r;
+   if (isActiveLabel) y = Math.max((-cameraY+8)/scale+height/2, Math.min((viewportHeight-cameraY-8)/scale-height/2,y));
    const box={left:x-width/2-5/scale,right:x+width/2+5/scale,top:y-height/2-4/scale,bottom:y+height/2+4/scale};
-   if (!isHovered && boxes.some(other=>box.left<other.right&&box.right>other.left&&box.top<other.bottom&&box.bottom>other.top)) continue;
+   if (!isActiveLabel && boxes.some(other=>box.left<other.right&&box.right>other.left&&box.top<other.bottom&&box.bottom>other.top)) continue;
    boxes.push(box);
    labels.push({node,x,y,font,width});
   }
@@ -230,9 +227,7 @@
   const index = new Map();
   for (const entry of entries) {
    const keys = new Set(platformConnectionNames(entry, ownership).map(normalize));
-   const focusNode = clusteredLayout && focusedEntity?.type === 'publisher' ? nodeByName.get(normalize(focusedEntity.name)) : null;
-   const ancestors = focusNode ? publisherAndAncestors(ownership, focusedEntity.name) : new Set();
-   index.set(entry.id, [...new Set([...keys].map(key => nodeByName.get(key) || (ancestors.has(key) ? focusNode : null)).filter(Boolean))]);
+   index.set(entry.id, [...keys].map(key => nodeByName.get(key)).filter(Boolean));
   }
   return index;
  });
@@ -240,15 +235,15 @@
   return connectionNodeIndex.get(entry.id) || [];
  }
  const entries = $derived(networkEntries(viewRecords));
- const companies = $derived(clusteredLayout ? clusteredLayout.nodes.filter(node=>node.key.startsWith('platform:')).map(node=>node.name) : entityView?.companies || [...new Set(entries.flatMap(entry => entry.companies))]);
+ const companies = $derived(vennLayout ? vennLayout.nodes.filter(node=>node.key.startsWith('platform:')).map(node=>node.name) : entityView?.companies || [...new Set(entries.flatMap(entry => entry.companies))]);
  const height = $derived(Math.max(650, Math.sqrt(hierarchy.nodes.length + companies.length) * 130));
  const platformRadius = $derived(Math.max(80, ...companies.map(name => name.length * 13 * .58 / 1.8 + 14)));
  const platformColumns = $derived(Math.max(1, Math.ceil(companies.length * (platformRadius * 2 + 24) / Math.max(1,height - 32))));
  const graphWidth = $derived(Math.max(1000, (platformColumns * (platformRadius * 2 + 24) + 64) / .5, height * Math.max(1.25, viewportWidth / Math.max(1, viewportHeight))));
  const graphBounds = $derived.by(() => {
-  if (!renderedNodes.length && !clusteredLayout?.circles.length) return {left:0,top:0,width:graphWidth,height};
-  const headings = clusteredLayout?.headings || [];
-  const regions = clusteredLayout?.circles || [];
+  if (!renderedNodes.length && !vennLayout?.circles.length) return {left:0,top:0,width:graphWidth,height};
+  const headings = vennLayout?.headings || [];
+  const regions = vennLayout?.circles || [];
   const left=Math.min(...renderedNodes.map(node=>node.x),...headings.map(heading=>heading.x-140),...regions.map(region=>region.x-region.r))-40;
   const top=Math.min(...renderedNodes.map(node=>node.y),...headings.map(heading=>heading.y-20),...regions.map(region=>region.y-region.r))-40;
   const right=Math.max(...renderedNodes.map(node=>node.x+node.width),...headings.map(heading=>heading.x+140),...regions.map(region=>region.x+region.r))+40;
@@ -317,7 +312,7 @@
  const routeCache = networkRouteCache;
  $effect(() => {
   const nodes=graphNodes;
-  if (clusteredLayout) { routedPaths = new Map(); routing = false; routingError = false; return; }
+  if (vennLayout) { routedPaths = new Map(); routing = false; routingError = false; return; }
   const geometry=node=>({key:node.key,x:node.x,y:node.y,r:node.r});
   const workerNodes=nodes.map(geometry);
   const links=connections;
@@ -379,15 +374,7 @@
   return {update};
  }
  function curve(connection) {
-  if (!clusteredLayout) return routedPaths.get(routeKey(connection)) || '';
-  const source = connection.node, target = platformNodes.get(connection.company);
-  if (!target) return '';
-  const sx = source.x+source.r, sy = source.y+source.r, tx = target.x+target.r, ty = target.y+target.r;
-  const distance = Math.hypot(tx-sx,ty-sy) || 1;
-  const ax = sx+(tx-sx)/distance*source.r, ay = sy+(ty-sy)/distance*source.r;
-  const bx = tx-(tx-sx)/distance*target.r, by = ty-(ty-sy)/distance*target.r;
-  const mid = (ax+bx)/2;
-  return `M ${ax} ${ay} C ${mid} ${ay}, ${mid} ${by}, ${bx} ${by}`;
+  return routedPaths.get(routeKey(connection)) || '';
  }
  const kinds = entry => (entry.interaction || []).map(value => String(value).toLowerCase());
  const kind = entry => kinds(entry).some(v => v.includes('lawsuit')) ? 'lawsuit' : kinds(entry).some(v => v.includes('grant')) ? 'grant' : 'deal';
@@ -438,20 +425,24 @@
   window.addEventListener('pointercancel', stopDragging);
 
   let fitFrame = 0;
+  let fitRevision = 0;
   const observer = new ResizeObserver(() => {
    const width = mapViewport.clientWidth, height = mapViewport.clientHeight;
    if (width <= 0 || height <= 0) return;
-   if (width > 0 && Math.abs(width - viewportWidth) >= 1) viewportWidth = width;
-   if (height > 0 && Math.abs(height - viewportHeight) >= 1) viewportHeight = height;
+   const changed = Math.abs(width - viewportWidth) >= 1 || Math.abs(height - viewportHeight) >= 1;
+   if (graphReady && !changed) return;
+   viewportWidth = width;
+   viewportHeight = height;
+   const revision = ++fitRevision;
    if (fitFrame) cancelAnimationFrame(fitFrame);
    fitFrame = requestAnimationFrame(async () => {
     // Let measured dimensions update layout before fitting, and commit the
     // camera transform before revealing the initially hidden graph.
     await tick();
-    if (disposed) return;
+    if (disposed || revision !== fitRevision) return;
     resetCamera();
     await tick();
-    if (!disposed) graphReady = true;
+    if (!disposed && revision === fitRevision) graphReady = true;
    });
   });
   observer.observe(mapViewport);
@@ -470,8 +461,19 @@
  });
 </script>
 
-<dialog class:clustered={showVenn} class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (!suppressGraphClick && event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
- <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle"><strong><em>Publicly disclosed</em></strong> interactions with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if focusedEntity?.type === 'platform'}<button class="resize" aria-pressed={showVenn} onclick={() => preferVenn = !preferVenn}>{showVenn ? "Network view" : "Venn network"}</button>{/if}{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
+{#snippet exploreSelection(name)}
+ <button class="node-focus" type="button"
+  style:font-size="{11 / (mapScale * cameraZoom)}px"
+  style:height="{20 / (mapScale * cameraZoom)}px"
+  style:margin-top="{2 / (mapScale * cameraZoom)}px"
+  title={`Show ${name}'s full network`} aria-label={`Explore ${name}'s network`}
+  onpointerdown={event => event.stopPropagation()} onclick={focusSelection}>
+  Explore this node <span aria-hidden="true">→</span>
+ </button>
+{/snippet}
+
+<dialog style:visibility={graphReady ? 'visible' : 'hidden'} class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (!suppressGraphClick && event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
+ <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle"><strong><em>Publicly disclosed</em></strong> interactions with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
 
@@ -485,7 +487,7 @@
  <div class="scroll" role="application" tabindex="0" aria-label="Relationship graph. Drag to pan, pinch to zoom. Keyboard: arrows to pan, plus or minus to zoom, Home to fit." onkeydown={handleMapKey} bind:this={mapViewport} onwheel={event => { event.preventDefault(); const bounds = mapViewport.getBoundingClientRect(); zoomAt(event.deltaY < 0 ? 1.12 : 1/1.12, event.clientX-bounds.left, event.clientY-bounds.top); }} onpointerdown={beginGesture} onclickcapture={handleMapClick}><div class="scaled-area" style:visibility={graphReady ? 'visible' : 'hidden'} style:width="{graphWidth * mapScale}px" style:height="{height * mapScale}px"><div class="map" style:width="{graphWidth}px" style:height="{height}px" style:transform="translate({cameraX}px, {cameraY}px) scale({mapScale * cameraZoom})">
  
  <svg class:venn-background={showVenn} width={graphWidth} {height} aria-label="Publisher connections">
-  {#each clusteredLayout?.circles || [] as region (region.type)}
+  {#each vennLayout?.circles || [] as region (region.type)}
    {@const compactTitle = region.r * mapScale * cameraZoom < 80}
    {@const labelFont = (compactTitle ? 12 : 14) / (mapScale * cameraZoom)}
    {@const labelGap = Math.min(region.r * 1.5, (region.label.length * .56 + .6) * labelFont)}
@@ -528,13 +530,13 @@
   <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
-  <div class="floating-node-label" class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}</div>
+  <div class="floating-node-label" class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}{#if canFocusSelection && selectedEntity.type === 'publisher' && label.node.key === selectedPublisher}{@render exploreSelection(selectedEntity.name)}{/if}</div>
  {/each}
  {#each renderedCompanies as company (company)}<div class="company-node" style:--relationship-fill={relationshipFills.get(`platform:${company}`)} class:muted-node={highlighting && !highlightedCompanies.has(company)} class:selected-node={selectedPlatform === company} class:focused-node={focusedEntity?.type === 'platform' && normalize(focusedEntity.name) === normalize(company)} class:hovered-node={hoveredPlatform === company} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><button class="platform-name" aria-label={company} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick || suppressGraphClick) return; selectEntity('platform', company); }} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPlatform = company; }} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
  {#each renderedCompanies as company (company)}
   {@const platform = platformNodes.get(company)}
   {#if !showVenn || hoveredPlatform === company || selectedPlatform === company || (focusedEntity?.type === 'platform' && normalize(focusedEntity.name) === normalize(company))}
-  <div class="floating-node-label platform-label" class:muted-label={highlighting && !highlightedCompanies.has(company)} style:left="{platform.x + platform.r}px" style:top="{platform.y + platform.r}px" style:font-size="{14 / (mapScale * cameraZoom)}px" style:width="{180 / (mapScale * cameraZoom)}px">{company}</div>
+  <div class="floating-node-label platform-label" class:muted-label={highlighting && !highlightedCompanies.has(company)} style:left="{platform.x + platform.r}px" style:top="{platform.y + platform.r}px" style:font-size="{14 / (mapScale * cameraZoom)}px" style:width="{180 / (mapScale * cameraZoom)}px">{company}{#if canFocusSelection && selectedEntity.type === 'platform' && company === selectedPlatform}{@render exploreSelection(selectedEntity.name)}{/if}</div>
   {/if}
  {/each}
  </div></div>
@@ -559,9 +561,6 @@
   </div>
   {#if inheritedAncestorKeys.size}<span class="inheritance-key">Dashed = inherited from parent</span>{/if}
  </div>
- {#if canFocusSelection}
-  <div class="focus-action"><button title={`Show ${selectedEntity.name}'s full network`} onclick={focusSelection}>Focus on {selectedEntity.name} <span aria-hidden="true">→</span></button></div>
- {/if}
  </div>
 
  {#if panelRecords.length}
@@ -574,7 +573,7 @@
 </dialog>
 
 <style>
- dialog { width:calc(100vw - 32px); max-width:1600px; max-height:95dvh; padding:1.5rem; border:1px solid #ddd; background:#fff; color:#111; box-sizing:border-box; font:inherit; box-shadow:0 8px 24px #0002; }
+ dialog { width:calc(100vw - 32px); max-width:1600px; height:95dvh; max-height:95dvh; margin:auto; overflow-y:auto; scrollbar-gutter:stable; padding:1.5rem; border:1px solid #ddd; background:#fff; color:#111; box-sizing:border-box; font:inherit; box-shadow:0 8px 24px #0002; }
  dialog.expanded { width:calc(100vw - 16px); height:calc(100dvh - 16px); max-width:none; max-height:none; margin:auto; }
  dialog::backdrop { background:#14182048; }
  header { position:relative; display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:1rem; margin-bottom:.75rem; }
@@ -590,11 +589,9 @@
  .connection-badge { pointer-events:none; }
  .connection-badge.muted-count { opacity:.3; }
  .graph-column { min-width:0; }
- .focus-action { display:flex; justify-content:center; padding:.75rem 0; }
- .focus-action button { font:inherit; font-size:.85rem; font-weight:500; color:#254c6f; background:#fff; border:1px solid #cbd5de; border-radius:4px; padding:.45rem .85rem; min-height:36px; cursor:pointer; }
- .focus-action button:hover { background:#f0f5f9; border-color:#8da6bb; }
- .focus-action button span { margin-left:.35rem; }
- .focus-action button:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
+ .node-focus { position:absolute; left:50%; top:100%; z-index:70; transform:translateX(-50%); display:inline-flex; align-items:center; justify-content:center; gap:.25em; width:max-content; padding:0; font:inherit; font-weight:500; line-height:1; white-space:nowrap; color:#254c6f; background:transparent; border:0; border-radius:3px; text-shadow:0 0 3px #fff,0 0 6px #fff; cursor:pointer; pointer-events:auto; }
+ .node-focus:hover { color:#173c5c; text-decoration:underline; text-underline-offset:3px; }
+ .node-focus:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
  .window-controls { justify-content:flex-end; display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; flex-shrink:0; }
  .resize { min-height:36px; font:inherit; font-size:.75rem; border:1px solid #ddd; background:#fff; color:#254c6f; padding:.25rem .6rem; cursor:pointer; }
  .close { min-width:40px; min-height:40px; border:0; background:none; font-size:1.2rem; cursor:pointer; }

@@ -1434,7 +1434,7 @@
 					<div class="card-field news-org-field">
 						<div class="news-org-header">
 							<div class="field-label">{interactionType === 'lawsuit' ? 'News Org(s)' : 'Publication(s)'}</div>
-							<div class="affected-note">(Publications named in {interactionType === 'lawsuit' ? 'suit' : interactionType === 'grant' ? 'deal announcement' : 'announcements or confirmed by platform'})</div>
+							<div class="affected-note">{interactionType === 'lawsuit' ? '(Publications named in suit)' : '(Organization(s) named in announcement(s) or confirmed by platform)'}</div>
 						</div>
 						<div class="field-value">
                             {#if interactionType === 'grant'}
