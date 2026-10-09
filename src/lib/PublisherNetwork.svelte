@@ -1,4 +1,5 @@
 <script>
+ import RelationshipOutline from './RelationshipOutline.svelte';
  import { isMdlConsolidation } from './mdl.js';
  import { onMount, untrack } from 'svelte';
  import { formatDate } from './utils.js';
@@ -212,6 +213,21 @@
  });
  const mapScale = $derived(Math.min(viewportWidth / graphBounds.width, viewportHeight / graphBounds.height));
  const connections = $derived(entries.flatMap(entry => connectionNodes(entry).flatMap(node => entry.companies.filter(company => companies.includes(company)).map(company => ({entry,node,company})))));
+ // Summarize every relationship type to the selected entity without rerouting nodes.
+ const relationshipOutlines = $derived.by(() => {
+  const outlines = new Map();
+  if (!selectedPlatform && !selectedPublisher) return outlines;
+  for (const link of connections) {
+   if (selectedPlatform ? link.company !== selectedPlatform : !selectedPublisherAncestors.has(link.node.key)) continue;
+   const key = selectedPlatform ? link.node.key : `platform:${link.company}`;
+   if (!outlines.has(key)) outlines.set(key, new Set());
+   for (const type of kinds(link.entry)) {
+    const normalized = type.includes('lawsuit') ? 'lawsuit' : type.includes('grant') ? 'grant' : type.includes('deal') ? 'deal' : null;
+    if (normalized && (!selectedKind || selectedKind === normalized)) outlines.get(key).add(normalized);
+   }
+  }
+  return new Map([...outlines].map(([key, types]) => [key, ['lawsuit', 'deal', 'grant'].filter(type => types.has(type))]));
+ });
  const drawnConnections = $derived.by(() => {
   const groups = new Map();
   for (const connection of connections) {
@@ -411,12 +427,12 @@
   {/each}
  </svg>
  {#each displayNodes as node (node.key)}
-  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { hoveredPublisher = null; }} class="ownership-node" class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:connected-node={highlighting && highlightedPublishers.has(node.key)} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-label={node.name} ondblclick={() => focusCamera(node)} onclick={() => { if (suppressGraphClick) return; clearSelection(); selectedPublisher = node.key; }} onfocus={() => hoveredPublisher = node.key} onblur={() => hoveredPublisher = null} >{node.name}</button></div>
+  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { hoveredPublisher = null; }} class="ownership-node" class:relationship-outlined={relationshipOutlines.get(node.key)?.length > 0} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><RelationshipOutline types={relationshipOutlines.get(node.key) || []} /><button class="publisher-name" aria-label={node.name} ondblclick={() => focusCamera(node)} onclick={() => { if (suppressGraphClick) return; clearSelection(); selectedPublisher = node.key; }} onfocus={() => hoveredPublisher = node.key} onblur={() => hoveredPublisher = null} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
   <div class="floating-node-label" class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}</div>
  {/each}
- {#each companies as company (company)}<div class="company-node" class:muted-node={highlighting && !highlightedCompanies.has(company)} class:connected-node={highlighting && highlightedCompanies.has(company)} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><button class="platform-name" aria-label={company} ondblclick={() => focusCamera(platformNodes.get(company))} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick || suppressGraphClick) return; clearSelection(); selectedPlatform = company; }} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPlatform = company; }} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
+ {#each companies as company (company)}<div class="company-node" class:relationship-outlined={relationshipOutlines.get(`platform:${company}`)?.length > 0} class:muted-node={highlighting && !highlightedCompanies.has(company)} class:selected-node={selectedPlatform === company} style:left="{platformNodes.get(company).x}px" style:top="{platformNodes.get(company).y}px" style:width="{platformNodes.get(company).width}px" style:height="{platformNodes.get(company).height}px"><RelationshipOutline types={relationshipOutlines.get(`platform:${company}`) || []} /><button class="platform-name" aria-label={company} ondblclick={() => focusCamera(platformNodes.get(company))} onpointerdown={event => startPlatformDrag(event, company)} onclick={() => { if (suppressPlatformClick || suppressGraphClick) return; clearSelection(); selectedPlatform = company; }} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPlatform = company; }} onpointerleave={() => { hoveredPlatform = null; }} onfocus={() => hoveredPlatform = company} onblur={() => hoveredPlatform = null} >{company}</button></div>{/each}
  {#each companies as company (company)}
   {@const platform = platformNodes.get(company)}
   <div class="floating-node-label platform-label" class:muted-label={highlighting && !highlightedCompanies.has(company)} style:left="{platform.x + platform.r}px" style:top="{platform.y + platform.r}px" style:font-size="{14 / (mapScale * cameraZoom)}px" style:width="{180 / (mapScale * cameraZoom)}px">{company}</div>
@@ -465,7 +481,9 @@
  .ownership-node.parent-circle { background:#f2f2f2; }
  .ownership-node.parent-circle.alt { background:#e5e5e5; }
  .company-node { z-index:30; background:#e8f2fb; border-color:#6b8fae; }
- .ownership-node.connected-node,.ownership-node.connected-node.parent-circle.alt,.company-node.connected-node { background:#fff5c4; border:2px solid #b89a35; }
+ .ownership-node.selected-node,.ownership-node.selected-node.parent-circle.alt,.company-node.selected-node { background:#fff5c4; border:2px solid #b89a35; }
+ .ownership-node.selected-node,.company-node.selected-node { opacity:1; }
+ .ownership-node.relationship-outlined,.company-node.relationship-outlined { border-color:transparent; }
  .ownership-node.muted-node,.company-node.muted-node { opacity:.8; }
  .ownership-node.outlined-descendant.muted-node { opacity:1; background:transparent; border-color:#777; }
  .publisher-name,.platform-name { width:100%; height:100%; padding:0; border:0; background:none; color:transparent; font-size:0; cursor:pointer; user-select:none; }
