@@ -90,12 +90,15 @@ test('unobstructed connections use one gentle curve with endpoints on node bound
  const family=[{key:'nyt',name:'The New York Times Company'},...Array.from({length:5},(_,i)=>({key:`child${i}`,name:`Publication ${i}`}))];
  for(const width of [1000,1100,1200,1300,1400,1500,1600,1800,2000]){
   const nodes=layoutCirclePacking(family,family.slice(1).map(node=>['nyt',node.key]),width,650,['Perplexity','OpenAI','Microsoft','Amazon']);
+  const departures=[];
   for(const target of nodes.filter(node=>node.key.startsWith('platform:'))){
    const path=routeCircleConnection(nodes[0],target,nodes,width,650);
    assert(path && !path.includes('NaN'),`missing ${target.name} at width ${width}`);
    const values=path.match(/-?\d+(?:\.\d+)?/g).map(Number);
+   departures.push(values.slice(0,2).join(','));
    assert.equal(values.at(-3),values.at(-1));
    assert.deepEqual(values.slice(-2),[target.x,target.y+target.r]);
   }
+  assert.equal(new Set(departures).size,4,`merged departures at width ${width}`);
  }
 });

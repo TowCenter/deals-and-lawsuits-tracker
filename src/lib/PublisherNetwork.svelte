@@ -529,8 +529,8 @@
  
  <svg class:venn-background={showVenn} width={graphWidth} {height} aria-label="Publisher connections">
   <defs>
-   <marker id={`${componentId}-connection-chevron`} viewBox="0 0 9 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth={9 / (mapScale * cameraZoom)} markerHeight={10 / (mapScale * cameraZoom)} orient="auto" overflow="visible">
-    <path d="M 2 1 L 8 5 L 2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+   <marker id={`${componentId}-connection-chevron`} viewBox="0 0 7 6" refX="6" refY="3" markerUnits="userSpaceOnUse" markerWidth={7 / (mapScale * cameraZoom)} markerHeight={6 / (mapScale * cameraZoom)} orient="auto" overflow="visible">
+    <path d="M 2 1 L 6 3 L 2 5" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
    </marker>
   </defs>
   {#each vennLayout?.circles || [] as region (region.type)}

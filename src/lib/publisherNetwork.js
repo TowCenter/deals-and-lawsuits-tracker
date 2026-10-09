@@ -203,7 +203,12 @@ export function routeCircleConnection(source, target, circles, width, height, re
  // Bound routing work independently of the database or zoomed canvas size.
  const step=retry ? Math.max(3,Math.sqrt(width*height/48000),Math.min(source.r/2,width/256,height/192)) : Math.max(6,width/192,height/128),cols=Math.ceil(width/step),rows=Math.ceil(height/step);
  const index=(x,y)=>y*cols+x;
- const start={x:Math.round(a.x/step),y:Math.round(a.y/step)},goal={x:Math.round(arrival.x/step),y:Math.round(arrival.y/step)};
+ // Give each destination its own departure point, including detours.
+ // Starting every grid search at the center merges routes into one stem.
+ const departureAngle=Math.atan2(arrival.y-a.y+lane,arrival.x-a.x);
+ const departure={x:a.x+Math.cos(departureAngle)*source.r,y:a.y+Math.sin(departureAngle)*source.r};
+ const routeOrigin=blocked(departure.x,departure.y) ? a : departure;
+ const start={x:Math.round(routeOrigin.x/step),y:Math.round(routeOrigin.y/step)},goal={x:Math.round(arrival.x/step),y:Math.round(arrival.y/step)};
  // Connections to the same platform converge at a shared, unobstructed
  // junction before their final approach. Each source keeps its own endpoint.
  const approach = corridor ? {x:corridor.x-64,y:corridor.y} : null;
@@ -231,7 +236,7 @@ export function routeCircleConnection(source, target, circles, width, height, re
  };
  const search=(start,goal)=>{
   const endpoint = gate && goal === gate ? approach : arrival;
-  if (clearSegment(a, endpoint)) return [a, endpoint];
+  if (clearSegment(routeOrigin, endpoint)) return [routeOrigin, endpoint];
   prepareOccupancy();
   const total=cols*rows,previous=new Int32Array(total),cost=new Int32Array(total),closed=new Uint8Array(total);
   previous.fill(-2);cost.fill(2147483647);
@@ -271,7 +276,7 @@ export function routeCircleConnection(source, target, circles, width, height, re
  };
  const legs=gate ? [search(start,gate),[approach,corridor,arrival]] : [search(start,goal)];
  if(legs.some(leg=>!leg))return retry ? (corridor ? routeCircleConnection(source,target,circles,width,height,true,null,lane) : '') : routeCircleConnection(source,target,circles,width,height,true,corridor,lane);
- legs[0][0]=a;
+ legs[0][0]=routeOrigin;
  if(gate)legs[0][legs[0].length-1]=approach;
  legs.at(-1)[legs.at(-1).length-1]=arrival;
  const clear = clearSegment;
@@ -284,7 +289,7 @@ export function routeCircleConnection(source, target, circles, width, height, re
  const boundary=(origin,toward,r)=>{const dx=toward.x-origin.x,dy=toward.y-origin.y,d=Math.hypot(dx,dy)||1;return {x:origin.x+dx*r/d,y:origin.y+dy*r/d};};
  // Remove all path portions inside either endpoint circle.
  while(simplified.length>2&&Math.hypot(simplified[1].x-a.x,simplified[1].y-a.y)<source.r)simplified.splice(1,1);
- simplified[0]=boundary(a,simplified[1],source.r);
+ if(routeOrigin===a)simplified[0]=boundary(a,simplified[1],source.r);
  simplified.push(end);
  let path = `M ${simplified[0].x} ${simplified[0].y}`;
  for (let i = 1; i < simplified.length - 1; i++) {
