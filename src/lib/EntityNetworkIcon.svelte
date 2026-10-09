@@ -5,7 +5,6 @@
  const componentId = $props.id();
  const tooltipId = `${componentId}-relationships`;
  let relationshipTooltip = $state(null);
- const visible = $derived(type !== 'publisher' || relationships.other(rowId, name).length > 0);
  function showRelationshipTooltip(event) {
   const bounds = event.currentTarget.getBoundingClientRect();
   const width = Math.min(type === 'platform' ? 280 : 440, window.innerWidth - 24);
@@ -38,7 +37,6 @@
 
 </script>
 
-{#if visible}
  <button
   type="button"
   class="entity-network-icon"
@@ -59,7 +57,6 @@
    <circle cx="4" cy="16.5" r="2" /><circle cx="20" cy="16.5" r="2" />
   </svg>
  </button>
-{/if}
 
 {#if relationshipTooltip}
  <div id={tooltipId} role="tooltip" class="relationship-tooltip" style:left={`${relationshipTooltip.left}px`} style:width={`${relationshipTooltip.width}px`} style:top={relationshipTooltip.above ? undefined : `${relationshipTooltip.top}px`} style:bottom={relationshipTooltip.above ? `${relationshipTooltip.bottom}px` : undefined}>

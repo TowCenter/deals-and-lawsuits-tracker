@@ -150,9 +150,13 @@ export function layoutCirclePacking(nodes, ownershipLinks, width, height, compan
  return result;
 }
 
-export function routeCircleConnection(source, target, circles, width, height, retry = false, corridor = null) {
+export function routeCircleConnection(source, target, circles, width, height, retry = false, corridor = null, lane = 0) {
  const center = node => ({x:node.x+node.r,y:node.y+node.r});
- const a=center(source),b=center(target),padding=retry ? 0 : Math.min(8, source.r*.15);
+ const a=center(source),b=center(target),padding=retry ? 0 : Math.min(8, source.r*.15) + (lane ? 12 + lane : 0);
+ const arrivalY=b.y+Math.max(-target.r*.6,Math.min(target.r*.6,lane));
+ const end={x:b.x-Math.sqrt(target.r**2-(arrivalY-b.y)**2),y:arrivalY};
+ const terminalLength=Math.min(24,target.r*.4);
+ const arrival={x:end.x-terminalLength,y:end.y};
  // Ancestor boundaries enclose the source; crossing them is necessary to exit.
  const candidates=circles.filter(node=>node.key!==source.key&&node.key!==target.key)
   .filter(node=> {
@@ -168,29 +172,29 @@ export function routeCircleConnection(source, target, circles, width, height, re
   const c=center(node);
   if(!obstacles.some(parent=>Math.hypot(c.x-center(parent).x,c.y-center(parent).y)+node.r<=parent.r+.001))obstacles.push(node);
  }
- const blocked=(x,y)=>obstacles.some(node=>Math.hypot(x-center(node).x,y-center(node).y)<node.r+padding);
+ obstacles.push(target);
+ const blocked=(x,y)=>obstacles.some(node=>Math.hypot(x-center(node).x,y-center(node).y)<node.r+(node.key===target.key ? 0 : padding));
  // Prefer a single gentle curve when it clears the ownership circles.
  // Avoid forcing every connection through a narrow shared approach corridor.
  if (!corridor && b.x > a.x + source.r + target.r) {
-  const dx=b.x-a.x,dy=b.y-a.y,distance=Math.hypot(dx,dy);
+  const dx=arrival.x-a.x,dy=arrival.y-a.y+lane,distance=Math.hypot(dx,dy);
   const start={x:a.x+dx/distance*source.r,y:a.y+dy/distance*source.r};
-  const end={x:b.x-target.r,y:b.y};
-  const span=end.x-start.x;
+  const span=arrival.x-start.x;
   const c1={x:start.x+span*.4,y:start.y};
-  const c2={x:end.x-span*.4,y:end.y};
+  const c2={x:arrival.x-span*.4,y:arrival.y};
   let collision=false;
   for(let sample=0;sample<=64;sample++){
    const t=sample/64,u=1-t;
-   const x=u*u*u*start.x+3*u*u*t*c1.x+3*u*t*t*c2.x+t*t*t*end.x;
-   const y=u*u*u*start.y+3*u*u*t*c1.y+3*u*t*t*c2.y+t*t*t*end.y;
+   const x=u*u*u*start.x+3*u*u*t*c1.x+3*u*t*t*c2.x+t*t*t*arrival.x;
+   const y=u*u*u*start.y+3*u*u*t*c1.y+3*u*t*t*c2.y+t*t*t*arrival.y;
    if(blocked(x,y)){collision=true;break;}
   }
-  if(!collision)return `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${end.x} ${end.y}`;
+  if(!collision)return `M ${start.x} ${start.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${arrival.x} ${arrival.y} L ${end.x} ${end.y}`;
  }
  // Bound routing work independently of the database or zoomed canvas size.
  const step=retry ? Math.max(3,Math.sqrt(width*height/48000),Math.min(source.r/2,width/256,height/192)) : Math.max(6,width/192,height/128),cols=Math.ceil(width/step),rows=Math.ceil(height/step);
  const index=(x,y)=>y*cols+x;
- const start={x:Math.round(a.x/step),y:Math.round(a.y/step)},goal={x:Math.round(b.x/step),y:Math.round(b.y/step)};
+ const start={x:Math.round(a.x/step),y:Math.round(a.y/step)},goal={x:Math.round(arrival.x/step),y:Math.round(arrival.y/step)};
  // Connections to the same platform converge at a shared, unobstructed
  // junction before their final approach. Each source keeps its own endpoint.
  const approach = corridor ? {x:corridor.x-64,y:corridor.y} : null;
@@ -201,7 +205,7 @@ export function routeCircleConnection(source, target, circles, width, height, re
   const dx=q.x-p.x,dy=q.y-p.y,length2=dx*dx+dy*dy;
   return !obstacles.some(node=>{
    const c=center(node),t=length2?Math.max(0,Math.min(1,((c.x-p.x)*dx+(c.y-p.y)*dy)/length2)):0;
-   return Math.hypot(p.x+t*dx-c.x,p.y+t*dy-c.y)<node.r+padding;
+   return Math.hypot(p.x+t*dx-c.x,p.y+t*dy-c.y)<node.r+(node.key===target.key ? 0 : padding);
   });
  };
  // Most corridors are unobstructed. Only allocate/rasterize a grid when a detour is needed.
@@ -210,14 +214,14 @@ export function routeCircleConnection(source, target, circles, width, height, re
   if (occupancy) return;
  occupancy=new Uint8Array(cols*rows);
  for(const node of obstacles) {
-  const c=center(node),radius=node.r+padding;
+  const c=center(node),radius=node.r+(node.key===target.key ? 0 : padding);
   const minX=Math.max(0,Math.floor((c.x-radius)/step)),maxX=Math.min(cols-1,Math.ceil((c.x+radius)/step));
   const minY=Math.max(0,Math.floor((c.y-radius)/step)),maxY=Math.min(rows-1,Math.ceil((c.y+radius)/step));
   for(let y=minY;y<=maxY;y++)for(let x=minX;x<=maxX;x++)if(Math.hypot(x*step-c.x,y*step-c.y)<radius)occupancy[y*cols+x]=1;
  }
  };
  const search=(start,goal)=>{
-  const endpoint = gate && goal === gate ? approach : b;
+  const endpoint = gate && goal === gate ? approach : arrival;
   if (clearSegment(a, endpoint)) return [a, endpoint];
   prepareOccupancy();
   const total=cols*rows,previous=new Int32Array(total),cost=new Int32Array(total),closed=new Uint8Array(total);
@@ -256,11 +260,11 @@ export function routeCircleConnection(source, target, circles, width, height, re
   }
   return null;
  };
- const legs=gate ? [search(start,gate),[approach,corridor,b]] : [search(start,goal)];
- if(legs.some(leg=>!leg))return retry ? (corridor ? routeCircleConnection(source,target,circles,width,height,true) : '') : routeCircleConnection(source,target,circles,width,height,true,corridor);
+ const legs=gate ? [search(start,gate),[approach,corridor,arrival]] : [search(start,goal)];
+ if(legs.some(leg=>!leg))return retry ? (corridor ? routeCircleConnection(source,target,circles,width,height,true,null,lane) : '') : routeCircleConnection(source,target,circles,width,height,true,corridor,lane);
  legs[0][0]=a;
  if(gate)legs[0][legs[0].length-1]=approach;
- legs.at(-1)[legs.at(-1).length-1]=b;
+ legs.at(-1)[legs.at(-1).length-1]=arrival;
  const clear = clearSegment;
  const simplified=[];
  for(const points of legs){
@@ -271,9 +275,8 @@ export function routeCircleConnection(source, target, circles, width, height, re
  const boundary=(origin,toward,r)=>{const dx=toward.x-origin.x,dy=toward.y-origin.y,d=Math.hypot(dx,dy)||1;return {x:origin.x+dx*r/d,y:origin.y+dy*r/d};};
  // Remove all path portions inside either endpoint circle.
  while(simplified.length>2&&Math.hypot(simplified[1].x-a.x,simplified[1].y-a.y)<source.r)simplified.splice(1,1);
- while(simplified.length>2&&Math.hypot(simplified.at(-2).x-b.x,simplified.at(-2).y-b.y)<target.r)simplified.splice(-2,1);
  simplified[0]=boundary(a,simplified[1],source.r);
- simplified[simplified.length-1]=boundary(b,simplified.at(-2),target.r);
+ simplified.push(end);
  let path = `M ${simplified[0].x} ${simplified[0].y}`;
  for (let i = 1; i < simplified.length - 1; i++) {
   const previous = simplified[i - 1], point = simplified[i], next = simplified[i + 1];

@@ -63,8 +63,25 @@ test('unobstructed connections use one gentle curve with endpoints on node bound
  const target={key:'platform',x:500,y:40,r:50};
  const path=routeCircleConnection(source,target,[source,target],700,450);
  assert.equal((path.match(/ C /g)||[]).length,1);
- assert(!path.includes(' Q ')&&!path.includes(' L '));
+ assert(!path.includes(' Q '));
+ assert.equal((path.match(/ L /g)||[]).length,1);
  const coordinates=path.match(/-?\d+(?:\.\d+)?/g).map(Number);
  assert(Math.abs(Math.hypot(coordinates[0]-70,coordinates[1]-270)-30)<.001);
  assert.deepEqual(coordinates.slice(-2),[500,90]);
+});
+
+ test('detours and separate interaction lanes enter the left edge horizontally',()=>{
+ const source={key:'source',x:20,y:160,r:40};
+ const target={key:'target',x:460,y:60,r:60};
+ const obstacle={key:'obstacle',x:240,y:80,r:90};
+ const paths=[-10,0,10].map(lane=>routeCircleConnection(source,target,[source,target,obstacle],650,400,false,null,lane));
+ assert.equal(new Set(paths).size,3);
+ for(const path of paths){
+  assert(path && !path.includes('NaN'));
+  const values=path.match(/-?\d+(?:\.\d+)?/g).map(Number);
+  const [beforeX,beforeY,x,y]=values.slice(-4);
+  assert.equal(beforeY,y);
+  assert(beforeX<x && x<520);
+  assert(Math.abs(Math.hypot(x-520,y-120)-60)<.001);
+ }
 });

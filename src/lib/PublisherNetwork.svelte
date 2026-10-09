@@ -8,8 +8,6 @@
  import { publisherNames as names, normalizeName as normalize, ownershipFamily, publisherAndAncestors, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
  let { row, data = [], onclose, recordCard, entityName = null, entityPlatform = null } = $props();
  const componentId = $props.id();
- const arrowId = `${componentId}-lawsuit-arrow`;
- const mutedArrowId = `${componentId}-lawsuit-arrow-muted`;
  let selectedRecord = $state(null);
  let selectedOrigin = $state(untrack(() => !entityName));
  let focusedEntity = $state(untrack(() => entityName ? {type: entityPlatform ? 'platform' : 'publisher', name: entityPlatform || entityName} : null));
@@ -208,8 +206,8 @@
   return false;
  }
  const inheritedAncestorKeys = $derived.by(() => {
-  if (focusedEntity?.type === 'platform' || hoveredKind || selectedKind || selectedPlatform || hoveredPlatform || hoveredConnection) return new Set();
-  const publisher = hoveredPublisher || selectedPublisher;
+  if (focusedEntity?.type === 'platform' || hoveredKind || selectedKind || selectedPlatform || hoveredPlatform) return new Set();
+  const publisher = hoveredPublisher || selectedPublisher || (focusedEntity?.type === 'publisher' ? normalize(focusedEntity.name) : null);
   if (!publisher) return new Set();
   const ancestors = publisherAndAncestors(ownership, publisher);
   ancestors.delete(publisher);
@@ -319,14 +317,14 @@
  const connectionLanes = $derived.by(() => {
   const pairs = new Map();
   for (const link of drawnConnections) {
-   const key = routeKey(link);
+   const key = pairKey(link);
    if (!pairs.has(key)) pairs.set(key, new Set());
    pairs.get(key).add(kind(link.entry));
   }
   return new Map([...pairs].map(([key, types]) => [key, ['lawsuit', 'deal', 'grant'].filter(type => types.has(type))]));
  });
  function laneOffset(connection) {
-  const types = connectionLanes.get(routeKey(connection)) || [];
+  const types = connectionLanes.get(pairKey(connection)) || [];
   return (types.indexOf(kind(connection.entry)) - (types.length - 1) / 2) * 10 / mapScale;
  }
  const outlinedDescendants = $derived.by(() => {
@@ -341,7 +339,8 @@
   return descendants;
  });
  const highlightedCompanies = $derived(new Set(connections.filter(emphasizedConnection).map(link => link.company)));
- const routeKey = connection => JSON.stringify([connection.node.key,connection.company]);
+ const pairKey = connection => JSON.stringify([connection.node.key,connection.company]);
+ const routeKey = connection => JSON.stringify([connection.node.key,connection.company,kind(connection.entry)]);
  let routedPaths = $state(new Map());
  let routing = $state(false);
  let routingError = $state(false);
@@ -351,7 +350,7 @@
   if (vennLayout) { routedPaths = new Map(); routing = false; routingError = false; return; }
   const geometry=node=>({key:node.key,x:node.x,y:node.y,r:node.r});
   const workerNodes=nodes.map(geometry);
-  const links=connections;
+  const links=drawnConnections;
   const width=graphWidth,canvasHeight=height;
   const cached=routeCache.get(nodes);
   if(cached && links.every(link => cached.has(routeKey(link)))){routedPaths=cached;routing=false;routingError=false;return;}
@@ -359,7 +358,7 @@
   for(const connection of links){
    const key=routeKey(connection);
    if(routes.has(key))continue;
-   routes.set(key,{key,source:geometry(connection.node),target:geometry(platformNodes.get(connection.company))});
+   routes.set(key,{key,source:geometry(connection.node),target:geometry(platformNodes.get(connection.company)),lane:laneOffset(connection)});
   }
   routedPaths=new Map();routing=routes.size>0;routingError=false;
   if(!routes.size)return;
@@ -378,8 +377,8 @@
     const start=performance.now();
     try {
      do {
-      const {key,source,target}=pending[index++];
-      accumulated.set(key,routeCircleConnection(source,target,workerNodes,width,canvasHeight));
+      const {key,source,target,lane}=pending[index++];
+      accumulated.set(key,routeCircleConnection(source,target,workerNodes,width,canvasHeight,false,null,lane));
      } while(index<pending.length && performance.now()-start<8);
      publish(index===pending.length);
      if(index<pending.length)fallbackTimer=setTimeout(step,0);
@@ -408,6 +407,12 @@
   }
   update(value);
   return {update};
+ }
+ function plaintiffToDefendant(connection) {
+  return kind(connection.entry) === 'lawsuit' && (connection.records || [connection.entry]).some(record =>
+   (record.plaintiff || []).some(name => normalize(name) === normalize(connection.node.name)) &&
+   (record.defendant || []).some(name => normalize(name) === normalize(connection.company))
+  );
  }
  function curve(connection) {
   return routedPaths.get(routeKey(connection)) || '';
@@ -523,6 +528,11 @@
  <div class="scroll" role="application" tabindex="0" aria-label="Relationship graph. Drag to pan, pinch to zoom. Keyboard: arrows to pan, plus or minus to zoom, Home to fit." onkeydown={handleMapKey} bind:this={mapViewport} onwheel={event => { event.preventDefault(); const bounds = mapViewport.getBoundingClientRect(); zoomAt(event.deltaY < 0 ? 1.12 : 1/1.12, event.clientX-bounds.left, event.clientY-bounds.top); }} onpointerdown={beginGesture} onclickcapture={handleMapClick}><div class="scaled-area" style:visibility={graphReady ? 'visible' : 'hidden'} style:width="{graphWidth * mapScale}px" style:height="{height * mapScale}px"><div class="map" style:width="{graphWidth}px" style:height="{height}px" style:transform="translate({cameraX}px, {cameraY}px) scale({mapScale * cameraZoom})">
  
  <svg class:venn-background={showVenn} width={graphWidth} {height} aria-label="Publisher connections">
+  <defs>
+   <marker id={`${componentId}-connection-chevron`} viewBox="0 0 9 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth={9 / (mapScale * cameraZoom)} markerHeight={10 / (mapScale * cameraZoom)} orient="auto" overflow="visible">
+    <path d="M 2 1 L 8 5 L 2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+   </marker>
+  </defs>
   {#each vennLayout?.circles || [] as region (region.type)}
    {@const compactTitle = region.r * mapScale * cameraZoom < 80}
    {@const labelFont = (compactTitle ? 12 : 14) / (mapScale * cameraZoom)}
@@ -538,19 +548,12 @@
    {/if}
 
   {/each}
-  <defs>
-   <marker id={arrowId} viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M 0 0 L 10 5 L 0 10 Z" fill="#b4232d" />
-   </marker>
-   <marker id={mutedArrowId} viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M 0 0 L 10 5 L 0 10 Z" fill="#f4dee0" />
-   </marker>
-  </defs>
+
   {#if !showVenn}
   {#each drawnConnections as connection, index (connection.key)}
-   <g transform={`translate(0 ${laneOffset(connection)})`} role="button" tabindex="0" aria-label={`${connection.node.name} — ${connection.entry.interaction.join(' / ')} — ${connection.company}, ${formatDate(connection.entry.date)}`} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredConnection = connection; }} onpointerleave={() => hoveredConnection = null} onfocus={() => hoveredConnection = connection} onblur={() => hoveredConnection = null} onclick={() => selectConnection(connection)} onkeydown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectConnection(connection); } }}>
+   <g role="button" tabindex="0" aria-label={`${connection.node.name} — ${connection.entry.interaction.join(' / ')} — ${connection.company}, ${formatDate(connection.entry.date)}`} onpointerenter={event => { if (event.pointerType !== 'touch') hoveredConnection = connection; }} onpointerleave={() => hoveredConnection = null} onfocus={() => hoveredConnection = connection} onblur={() => hoveredConnection = null} onclick={() => selectConnection(connection)} onkeydown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectConnection(connection); } }}>
     <path class="hit-area" d={curve(connection)} />
-    <path id={`${componentId}-connection-${index}`} marker-end={kind(connection.entry) === 'lawsuit' ? `url(#${highlighting && !emphasizedConnection(connection) ? mutedArrowId : arrowId})` : undefined} class={kind(connection.entry)} class:inherited={inheritedConnection(connection)} class:highlighted={emphasizedConnection(connection)} class:muted={highlighting && !emphasizedConnection(connection)} d={curve(connection)} />
+    <path id={`${componentId}-connection-${index}`} marker-end={plaintiffToDefendant(connection) ? `url(#${componentId}-connection-chevron)` : undefined} class={kind(connection.entry)} class:inherited={inheritedConnection(connection)} class:highlighted={emphasizedConnection(connection)} class:muted={highlighting && !emphasizedConnection(connection)} d={curve(connection)} />
     {#if connection.count > 1 && curve(connection)}
      <g class="connection-badge" class:muted-count={highlighting && !emphasizedConnection(connection)} use:positionCountBadge={{path:curve(connection)}}>
       <rect x={-(String(connection.count).length*7+12)/(2*mapScale*cameraZoom)} y={-10/(mapScale*cameraZoom)} width={(String(connection.count).length*7+12)/(mapScale*cameraZoom)} height={20/(mapScale*cameraZoom)} rx={5/(mapScale*cameraZoom)} fill={kind(connection.entry) === 'lawsuit' ? '#b4232d' : kind(connection.entry) === 'grant' ? '#1565c0' : '#21823b'} />
