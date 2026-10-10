@@ -720,7 +720,8 @@
 
  function highlightEntity(record, name) {
   const label = organizationNameAtEvent(record, name);
-  return highlightText(label, highlightedEntity && normalizeName(name) === normalizeName(highlightedEntity) ? [label] : []);
+  return highlightedEntity && normalizeName(name) === normalizeName(highlightedEntity)
+   ? `<mark class="highlight">${escapeHtml(label)}</mark>` : highlightText(label);
  }
 	function highlightText(text, searchTerms = []) {
 		if (!text) return '';
@@ -795,10 +796,10 @@
 				return segment.content;
 			}
 			const parts = segment.content.split(highlightPattern);
-		return parts.map(part => {
-				// Check if part matches any pattern (case-insensitive)
-				const partLower = part.toLowerCase();
-				if (escapedPatterns.some(p => p.toLowerCase() === partLower)) {
+		return parts.map((part, index) => {
+				// Captured matches occupy odd slots; comparing regex-escaped text
+				// to display text loses matches containing punctuation.
+				if (index % 2 === 1) {
 				return `<mark class="highlight">${part}</mark>`;
 			}
 			return part;
