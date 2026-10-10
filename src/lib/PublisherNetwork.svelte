@@ -154,7 +154,7 @@
    const priority = node => node.key === hoveredPublisher ? 4 : node.key === selectedPublisher ? 3 : node.depth === 0 || node.width*scale >= 130 ? 2 : 1;
    return priority(b)-priority(a) || b.r-a.r || a.key.localeCompare(b.key);
   });
-  const labels = [], boxes = (vennLayout?.headings || []).map(heading => {
+  const labels = [], labelBoxes = [], boxes = (vennLayout?.headings || []).map(heading => {
     const width = heading.label.length * 14 * .58 / scale;
     return {left:heading.x-width/2-8/scale,right:heading.x+width/2+8/scale,top:heading.y-16/scale,bottom:heading.y+10/scale};
    });
@@ -173,7 +173,9 @@
    let y = node.hasChildren && !isActiveLabel && !isVennLargeNode ? node.y+(node.labelInset||0) : node.y+node.r;
    if (isActiveLabel) y = Math.max((-cameraY+8)/scale+height/2, Math.min((viewportHeight-cameraY-8)/scale-height/2,y));
    const box={left:x-width/2-5/scale,right:x+width/2+5/scale,top:y-height/2-4/scale,bottom:y+height/2+4/scale};
-   if (!isActiveLabel && boxes.some(other=>box.left<other.right&&box.right>other.left&&box.top<other.bottom&&box.bottom>other.top)) continue;
+   const overlaps = other => box.left<other.right&&box.right>other.left&&box.top<other.bottom&&box.bottom>other.top;
+   if (labelBoxes.some(overlaps) || (!isActiveLabel && boxes.some(overlaps))) continue;
+   labelBoxes.push(box);
    boxes.push(box);
    labels.push({node,x,y,font,width});
   }
