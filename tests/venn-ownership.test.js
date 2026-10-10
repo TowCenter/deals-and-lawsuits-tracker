@@ -12,3 +12,17 @@ test('Venn families preserve nested ownership and combine relationship types wit
  assert.deepEqual([...trees[0].children[0].ownTypes],['lawsuit']);
  assert.equal(trees[0].children[0].children[0].ownTypes.size,0);
 });
+
+ test('default Venn labels identify the highest directly connected organization',async()=>{
+ const {layoutVennNetwork}=await import('../src/lib/vennNetwork.js');
+ const record={id:'1',organization_publisher_named_in_deal_suit:['Parent','Child'],parent_child_matches:[{lineage:['Parent','Child','Grandchild']}],interaction:['Deal'],companies:['OpenAI']};
+ const ownership=buildOwnershipGraph([record]);
+ const nodes=layoutVennNetwork({type:'platform',name:'OpenAI'},[record],ownership).nodes;
+ assert.equal(nodes.find(node=>node.key==='parent').hasDirectAncestor,false);
+ assert.equal(nodes.find(node=>node.key==='child').hasDirectAncestor,true);
+ const childOnly={...record,organization_publisher_named_in_deal_suit:['Child']};
+ const childNodes=layoutVennNetwork({type:'platform',name:'OpenAI'},[childOnly],ownership).nodes;
+ assert.equal(childNodes.find(node=>node.key==='parent').hasDirectRelationship,false);
+ assert.equal(childNodes.find(node=>node.key==='child').hasDirectRelationship,true);
+ assert.equal(childNodes.find(node=>node.key==='child').hasDirectAncestor,false);
+});

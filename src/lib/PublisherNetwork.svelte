@@ -160,7 +160,7 @@
    });
   for (const node of candidates) {
    const isActiveLabel = node.key === hoveredPublisher || node.key === selectedPublisher;
-   const isVennLargeNode = showVenn && node.hasDirectRelationship && node.r * scale >= 20;
+   const isVennLargeNode = showVenn && node.hasDirectRelationship && !node.hasDirectAncestor && node.r * scale >= 20;
    if (!isActiveLabel && !isVennLargeNode && !(focusedEntity?.type === 'publisher' && node.key === normalize(focusedEntity.name))) continue;
    const font = 14 / scale;
    const width = Math.min(node.name.length * font * .58 + font, 180 / scale, isVennLargeNode && !isActiveLabel ? Math.max(100 / scale, node.width * .8) : Infinity);
@@ -173,7 +173,7 @@
    let y = node.hasChildren && !isActiveLabel && !isVennLargeNode ? node.y+(node.labelInset||0) : node.y+node.r;
    if (isActiveLabel) y = Math.max((-cameraY+8)/scale+height/2, Math.min((viewportHeight-cameraY-8)/scale-height/2,y));
    const box={left:x-width/2-5/scale,right:x+width/2+5/scale,top:y-height/2-4/scale,bottom:y+height/2+4/scale};
-   if (!isActiveLabel && !isVennLargeNode && boxes.some(other=>box.left<other.right&&box.right>other.left&&box.top<other.bottom&&box.bottom>other.top)) continue;
+   if (!isActiveLabel && boxes.some(other=>box.left<other.right&&box.right>other.left&&box.top<other.bottom&&box.bottom>other.top)) continue;
    boxes.push(box);
    labels.push({node,x,y,font,width});
   }

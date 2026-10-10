@@ -117,7 +117,7 @@ function buildVennLayout(focus, entries, ownership, filter) {
   for (const node of root.descendants().slice(1)) {
    const r=node.r;
    const centerX=cx+node.x-root.x, centerY=cy+node.y-root.y;
-   nodes.push({key:node.data.key,name:node.data.name,x:centerX-r,y:centerY-r,r,width:2*r,height:2*r,depth:node.depth-1,hasChildren:Boolean(node.children?.length),hasDirectRelationship:Boolean(node.data.ownTypes?.size || (!node.data.ownTypes && node.data.types?.size)),primary:node.depth===1});
+   nodes.push({key:node.data.key,name:node.data.name,x:centerX-r,y:centerY-r,r,width:2*r,height:2*r,depth:node.depth-1,hasChildren:Boolean(node.children?.length),hasDirectRelationship:Boolean(node.data.ownTypes?.size || (!node.data.ownTypes && node.data.types?.size)),hasDirectAncestor:node.ancestors().slice(1).some(ancestor=>Boolean(ancestor.data.ownTypes?.size)),primary:node.depth===1});
   }
  }
  return {nodes,circles,headings:circles.map(circle=>({key:circle.type,label:circle.label,color:circle.color,x:circle.x,y:circle.type==='grant' ? circle.y+circle.r+15 : circle.y-circle.r-15}))};
