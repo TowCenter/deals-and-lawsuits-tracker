@@ -1,5 +1,7 @@
 <script>
 	import { base } from '$app/paths';
+ import CardShare from './CardShare.svelte';
+ import { onMount, tick } from 'svelte';
 	import { organizationNameAtEvent } from './organizationNames.js';
 	import { isMdlConsolidation } from './mdl.js';
 	import { buildOwnershipGraph, publisherNames, normalizeName } from './publisherNetwork.js';
@@ -88,7 +90,17 @@
 		return places.filter(place => filterLocation.includes(place.country));
 	}
 
-	let expandedCards = $state(new Set());
+	let sharedCardId = $state(null);
+ onMount(() => {
+  const readHash = () => {
+   try { sharedCardId = window.location.hash.startsWith('#card-') ? decodeURIComponent(window.location.hash.slice(6)) : null; }
+   catch { sharedCardId = null; }
+  };
+  readHash();
+  window.addEventListener('hashchange', readHash);
+  return () => window.removeEventListener('hashchange', readHash);
+ });
+ let expandedCards = $state(new Set());
 	$effect(() => { if (focusedRecordId != null) expandedCards = new Set([focusedRecordId]); });
 
 	// True for a card shown because another card links to it, not the card being viewed
@@ -682,6 +694,10 @@
 
 	let filteredData = $derived(getFilteredAndSorted());
 	let groupedData = $derived(groupByMonth(filteredData));
+ $effect(() => {
+  const target = focusedRecordIds == null && focusedRecordId == null && sharedCardId != null ? filteredData.find(row => String(row.id) === sharedCardId) : null;
+  if (target) tick().then(() => document.getElementById(`card-${target.id}`)?.scrollIntoView({block: 'start'}));
+ });
 
 	$effect(() => {
 		onFilteredDataChange(filteredData);
@@ -697,7 +713,7 @@
 			(filterLocation?.length > 0);
 
 		// Expand every matching card while filtering, collapse everything otherwise
-		expandedCards = focusedRecordId != null ? new Set([focusedRecordId]) : hasActiveFilters ? new Set(filteredData.map(row => row.id)) : new Set();
+		expandedCards = focusedRecordId != null ? new Set([focusedRecordId]) : hasActiveFilters ? new Set(filteredData.map(row => row.id)) : new Set(filteredData.filter(row => String(row.id) === sharedCardId).map(row => row.id));
 	});
 
 	/**
@@ -1655,6 +1671,7 @@
 					</div>
 				{/if}
 							</div>
+                            {#if row.reported_details}<CardShare {row} />{/if}
 						</div>
 					{/each}
 					</div>
@@ -1737,6 +1754,8 @@
 	}
 
 	.card-wrapper {
+        box-sizing: border-box;
+        padding-right: 38px;
 		width: 100%;
 		overflow: visible;
 		position: relative;
