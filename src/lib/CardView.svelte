@@ -36,6 +36,7 @@
 	 * @property {Array<number|string>|null} [focusedRecordIds=null] - Records to display collapsed in the network panel
 	 * @property {number|string|null} [focusedRecordId=null] - Record to display in the detail dialog
 	 * @property {boolean} [showEntityNetworks=false] - Show organization network icons in expanded cards
+	 * @property {boolean} [showSharing=true] - Show sharing controls on main cards
 	 * @property {boolean} [showNetworks=true] - Show per-record network buttons
 	 * @property {Array<Object>} [data=[]] - Card data rows
 	 * @property {string} [searchQuery=''] - Search query string
@@ -53,6 +54,7 @@
 	let {
 		data = [],
 		showNetworks = true,
+        showSharing = true,
 		showEntityNetworks = false,
 		focusedRecordId = null,
 		focusedRecordIds = null,
@@ -1272,7 +1274,7 @@
  <PublisherNetwork row={networkRow} {data} entityName={networkEntity?.name} entityPlatform={networkEntity?.type === 'platform' ? networkEntity.name : null} onclose={() => { networkRow = null; networkEntity = null; }}>
   {#snippet recordCard(selectedEntries, expandRecord, selectedEntityName)}
    {#key selectedEntries.map(entry => entry.id).join(',') + expandRecord}
-    <CardView {data} highlightedEntity={selectedEntityName} showNetworks={false} showEntityNetworks={false} focusedRecordId={expandRecord && selectedEntries.length === 1 ? selectedEntries[0]?.id : null} focusedRecordIds={selectedEntries.map(entry => entry.id)} {showCountries} />
+    <CardView {data} highlightedEntity={selectedEntityName} showSharing={false} showNetworks={false} showEntityNetworks={false} focusedRecordId={expandRecord && selectedEntries.length === 1 ? selectedEntries[0]?.id : null} focusedRecordIds={selectedEntries.map(entry => entry.id)} {showCountries} />
    {/key}
   {/snippet}
  </PublisherNetwork>
@@ -1351,7 +1353,7 @@
 							: ''}
 						<div
 							class="card-wrapper"
-                            class:with-share={showNetworks && Boolean(row.reported_details)}
+                            class:with-share={showSharing && Boolean(row.reported_details)}
 							class:is-source={isSourceCard(row)}
 							class:is-related={viewingRelatedTo != null && !isSourceCard(row)}
 						>
@@ -1672,7 +1674,7 @@
 					</div>
 				{/if}
 							</div>
-                            {#if showNetworks && row.reported_details}<CardShare {row} />{/if}
+                            {#if showSharing && row.reported_details}<CardShare {row} />{/if}
 						</div>
 					{/each}
 					</div>
@@ -1755,6 +1757,7 @@
 	}
 
  .card-wrapper.with-share {padding-right: 38px;}
+ .card-wrapper:has(:global(.share-icon[aria-expanded="true"])) {z-index: 10;}
 
 	.card-wrapper {
         box-sizing: border-box;
