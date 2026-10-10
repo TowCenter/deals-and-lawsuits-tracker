@@ -58,8 +58,8 @@
  .share-control {position: absolute; top: .75rem; right: 0; z-index: 5;}
  .share-icon {display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; background: white; color: #999; cursor: pointer; border-radius: 50%; box-shadow: 0 1px 7px #0000000d;}
  .share-icon:hover, .share-icon[aria-expanded="true"] {color: #315a7a; background: #f5f7fa;}
- .share-message {position: absolute; right: 0; bottom: 46px; width: min(275px, 78vw); padding: .8rem; box-sizing: border-box; font-family: inherit; background: white; border: 1px solid #e0e0e0; border-radius: 0; box-shadow: 0 3px 12px #00000012; font-size: .8rem; color: #333;}
- .share-message::before {content: ''; position: absolute; right: 10px; bottom: -7px; width: 13px; height: 13px; background: white; transform: rotate(45deg); border-right: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0;}
+ .share-message {position: absolute; right: 0; top: 46px; width: min(275px, 78vw); padding: .8rem; box-sizing: border-box; font-family: inherit; background: white; border: 1px solid #e0e0e0; border-radius: 0; box-shadow: 0 3px 12px #00000012; font-size: .8rem; color: #333;}
+ .share-message::before {content: ''; position: absolute; right: 10px; top: -7px; width: 13px; height: 13px; background: white; transform: rotate(45deg); border-left: 1px solid #e0e0e0; border-top: 1px solid #e0e0e0;}
  .social-options {display: grid; grid-template-columns: repeat(2, 1fr); gap: .35rem; margin: .75rem 0;}
  .social-options a {display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 5px; width: 100%; box-sizing: border-box; font: inherit; font-weight: 600; color: #777; background: none; border: 0; padding: .45rem .2rem; text-decoration: none; cursor: pointer; text-align: left; border-radius: 0; background: #fafafa; border: 1px solid #e0e0e0;}
  .social-options a:hover {background: #f0f0f0; color: #333;}
