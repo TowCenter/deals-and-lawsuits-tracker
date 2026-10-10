@@ -615,7 +615,7 @@
 
  {#if panelRecords.length}
   <section class="selected-record" aria-label="Selected record" aria-live="polite">
-   {@render recordCard(panelRecords, selectedKind == null && selectedPlatform == null && selectedPublisher == null)}
+   {@render recordCard(panelRecords, selectedKind == null && selectedPlatform == null && selectedPublisher == null, selectedEntity?.name || null)}
   </section>
  {/if}
  </div>

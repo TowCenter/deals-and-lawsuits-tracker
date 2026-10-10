@@ -30,6 +30,7 @@
 
 	/**
 	 * @typedef {Object} Props
+	 * @property {string|null} [highlightedEntity=null] - Selected network entity to emphasize in card names
 	 * @property {Array<number|string>|null} [focusedRecordIds=null] - Records to display collapsed in the network panel
 	 * @property {number|string|null} [focusedRecordId=null] - Record to display in the detail dialog
 	 * @property {boolean} [showEntityNetworks=false] - Show organization network icons in expanded cards
@@ -53,6 +54,7 @@
 		showEntityNetworks = false,
 		focusedRecordId = null,
 		focusedRecordIds = null,
+		highlightedEntity = null,
 		searchQuery = '',
 		filterInteraction = [],
 		filterType = [],
@@ -716,6 +718,10 @@
 	// Cache for escaped patterns to avoid repeated regex compilation
 	const highlightPatternCache = new Map();
 
+ function highlightEntity(record, name) {
+  const label = organizationNameAtEvent(record, name);
+  return highlightText(label, highlightedEntity && normalizeName(name) === normalizeName(highlightedEntity) ? [label] : []);
+ }
 	function highlightText(text, searchTerms = []) {
 		if (!text) return '';
 
@@ -1247,9 +1253,9 @@
 
 {#if networkRow}
  <PublisherNetwork row={networkRow} {data} entityName={networkEntity?.name} entityPlatform={networkEntity?.type === 'platform' ? networkEntity.name : null} onclose={() => { networkRow = null; networkEntity = null; }}>
-  {#snippet recordCard(selectedEntries, expandRecord)}
+  {#snippet recordCard(selectedEntries, expandRecord, selectedEntityName)}
    {#key selectedEntries.map(entry => entry.id).join(',') + expandRecord}
-    <CardView {data} showNetworks={false} showEntityNetworks={false} focusedRecordId={expandRecord && selectedEntries.length === 1 ? selectedEntries[0]?.id : null} focusedRecordIds={selectedEntries.map(entry => entry.id)} {showCountries} />
+    <CardView {data} highlightedEntity={selectedEntityName} showNetworks={false} showEntityNetworks={false} focusedRecordId={expandRecord && selectedEntries.length === 1 ? selectedEntries[0]?.id : null} focusedRecordIds={selectedEntries.map(entry => entry.id)} {showCountries} />
    {/key}
   {/snippet}
  </PublisherNetwork>
@@ -1357,7 +1363,7 @@
 											<div class="header-left">
 												{#if Array.isArray(row.defendant) && row.defendant.length > 0}
 													{#each row.defendant as defendant}
-														<div class="header-item">{@html highlightText(organizationNameAtEvent(row, defendant))}
+														<div class="header-item">{@html highlightEntity(row, defendant)}
 {@render entityNetworkIcon(row.id, defendant, 'platform')}</div>
 													{/each}
 												{/if}
@@ -1366,7 +1372,7 @@
 											<div class="header-right-content">
 												{#if Array.isArray(row.plaintiff) && row.plaintiff.length > 0}
 													{#each row.plaintiff as plaintiff}
-														<div class="header-item">{@html highlightText(organizationNameAtEvent(row, plaintiff))}
+														<div class="header-item">{@html highlightEntity(row, plaintiff)}
 {@render entityNetworkIcon(row.id, plaintiff, 'publisher')}</div>
 													{/each}
 												{/if}
@@ -1375,7 +1381,7 @@
 											<div class="header-left">
 												{#if Array.isArray(row.platform) && row.platform.length > 0}
 													{#each row.platform as platform}
-														<div class="header-item">{@html highlightText(organizationNameAtEvent(row, platform))}
+														<div class="header-item">{@html highlightEntity(row, platform)}
 {@render entityNetworkIcon(row.id, platform, 'platform')}</div>
 													{/each}
 												{/if}
@@ -1384,7 +1390,7 @@
 											<div class="header-right-content">
 												{#if Array.isArray(allPublishers) && allPublishers.length > 0}
 													{#each allPublishers as pub}
-														<div class="header-item">{@html highlightText(organizationNameAtEvent(row, pub))}
+														<div class="header-item">{@html highlightEntity(row, pub)}
 {@render entityNetworkIcon(row.id, pub, 'publisher')}</div>
 													{/each}
 												{/if}
@@ -1422,12 +1428,12 @@
 						<div class="field-value">
 							{#if interactionType === 'lawsuit' && Array.isArray(entry.defendant) && entry.defendant.length > 0}
 								{#each entry.defendant as defendant}
-									<div class="field-item">{@html highlightText(organizationNameAtEvent(row, defendant))}
+									<div class="field-item">{@html highlightEntity(row, defendant)}
 {@render entityNetworkIcon(row.id, defendant, 'platform')}</div>
 								{/each}
 							{:else if Array.isArray(entry.platform) && entry.platform.length > 0}
 								{#each entry.platform as platform}
-									<div class="field-item">{@html highlightText(organizationNameAtEvent(row, platform))}
+									<div class="field-item">{@html highlightEntity(row, platform)}
 {@render entityNetworkIcon(row.id, platform, 'platform')}</div>
 								{/each}
 					{/if}
@@ -1442,7 +1448,7 @@
 						<div class="field-value">
                             {#if interactionType === 'grant'}
                              <GrantPublications presentation={grantPresentations(entry)}>
-                              {#snippet label(name)}{@html highlightText(organizationNameAtEvent(row, name))}{/snippet}
+                              {#snippet label(name)}{@html highlightEntity(row, name)}{/snippet}
                               {#snippet flags(name)}{@render countryFlags(entry, name)}{/snippet}
                               {#snippet networkIcon(name)}{@render entityNetworkIcon(row.id, name, 'publisher')}{/snippet}
                              </GrantPublications>
@@ -1453,7 +1459,7 @@
 								{@const hasMatches = Object.keys(orgTree).length > 0 || (orgTree.publications && orgTree.publications.length > 0)}
 								<div class="publisher-item">
 									<div class="field-item">
-										{@html highlightText(organizationNameAtEvent(row, org))}
+										{@html highlightEntity(row, org)}
 {@render entityNetworkIcon(row.id, org, 'publisher')}
 										{@render countryFlags(entry, org)}
 									</div>
@@ -1472,7 +1478,7 @@
 																	{#if interactionType === 'grant' && (entry.publications_received_grants || []).some(name => normalizeName(name) === normalizeName(publication))}
 																		<span class="hierarchy-label">Grantee: </span>
 																	{/if}
-																	{@html highlightText(organizationNameAtEvent(row, publication))}
+																	{@html highlightEntity(row, publication)}
 
 																	{@render countryFlags(entry, publication)}
 																</div>
@@ -1483,7 +1489,7 @@
 															<span class="hierarchy-intermediate-name">
                                                         {#if interactionType === 'grant' && (entry.publications_received_grants || []).some(name => normalizeName(name) === normalizeName(key))}<span class="hierarchy-label">Grantee: </span>{/if}
 
-																{@html highlightText(organizationNameAtEvent(row, key))}
+																{@html highlightEntity(row, key)}
 
 																{@render countryFlags(entry, key)}
 															</span>
