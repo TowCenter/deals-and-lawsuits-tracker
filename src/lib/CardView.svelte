@@ -1351,6 +1351,7 @@
 							: ''}
 						<div
 							class="card-wrapper"
+                            class:with-share={showNetworks && Boolean(row.reported_details)}
 							class:is-source={isSourceCard(row)}
 							class:is-related={viewingRelatedTo != null && !isSourceCard(row)}
 						>
@@ -1671,7 +1672,7 @@
 					</div>
 				{/if}
 							</div>
-                            {#if row.reported_details}<CardShare {row} />{/if}
+                            {#if showNetworks && row.reported_details}<CardShare {row} />{/if}
 						</div>
 					{/each}
 					</div>
@@ -1753,9 +1754,10 @@
 		width: 100%;
 	}
 
+ .card-wrapper.with-share {padding-right: 38px;}
+
 	.card-wrapper {
         box-sizing: border-box;
-        padding-right: 38px;
 		width: 100%;
 		overflow: visible;
 		position: relative;
