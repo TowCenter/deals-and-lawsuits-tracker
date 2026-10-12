@@ -5,7 +5,10 @@ const ids = (row) => Array.isArray(row.Lawsuit_ID) ? row.Lawsuit_ID : row.Lawsui
 export function buildMdlMembership(rows) {
     const membership = new Map();
     for (const row of rows) {
-        for (const mdl of Array.isArray(row.MDL) ? row.MDL : []) {
+        const explicit = Array.isArray(row.MDL) ? row.MDL : [];
+        const embedded = /-md-\d+/i.test(String(row['Case Number'] || ''))
+            ? [{ MDL_Case_Number: row['Case Number'], Docket: row.Docket }] : [];
+        for (const mdl of explicit.length ? explicit : embedded) {
             const docket = String(mdl.MDL_Case_Number || '');
             const number = docket.match(/-md-0*(\d+)/i)?.[1];
             if (!number) continue;
@@ -28,7 +31,23 @@ export function buildMdlMembership(rows) {
             }
         }
     }
-    return (row) => ids(row).map(id => membership.get(id)).find(Boolean) || {};
+    return (row) => {
+        const details = ids(row).map(id => membership.get(id)).find(Boolean);
+        if (!details) return {};
+        const caseIds = new Set(ids(row));
+        const seen = new Set();
+        const original_case_dockets = rows.filter(item => ids(item).some(id => caseIds.has(id)))
+            .filter(item => !row.Date || !item.Date || item.Date <= row.Date)
+            .filter(item => item['Case Number'] && !/-md-\d+/i.test(String(item['Case Number'])))
+            .filter(item => {
+                const number = String(item['Case Number']).trim();
+                if (/^(unknown|\(unknown\)|nan|—)$/i.test(number) || seen.has(number)) return false;
+                seen.add(number);
+                return true;
+            })
+            .map(item => ({number: String(item['Case Number']).trim(), url: item.Docket || null}));
+        return {...details, original_case_dockets};
+    };
 }
 
 export function isMdlConsolidation(row) {

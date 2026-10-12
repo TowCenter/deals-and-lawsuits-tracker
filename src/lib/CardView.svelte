@@ -1,6 +1,7 @@
 <script>
 	import { base } from '$app/paths';
  import CardShare from './CardShare.svelte';
+ import CoveragePreview from './CoveragePreview.svelte';
  import { onMount, tick } from 'svelte';
 	import { organizationNameAtEvent } from './organizationNames.js';
 	import { isMdlConsolidation } from './mdl.js';
@@ -103,6 +104,24 @@
   return () => window.removeEventListener('hashchange', readHash);
  });
  let expandedCards = $state(new Set());
+ let infoPosition = $state({left:16, top:16, maxHeight:300, transform:'none'});
+ function positionDocumentInfo(event) {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  const width = Math.min(280, window.innerWidth - 32);
+  const above = bounds.top - 24;
+  const below = window.innerHeight - bounds.bottom - 24;
+  const placeAbove = above > below;
+  const maxHeight = Math.max(80, Math.min(320, placeAbove ? above : below));
+  infoPosition = {left:Math.max(16, Math.min(bounds.right - width, window.innerWidth - width - 16)), top:placeAbove ? bounds.top - 4 : bounds.bottom + 4, transform:placeAbove ? 'translateY(-100%)' : 'none', maxHeight};
+ }
+ let expandedPublisherLists = $state(new Set());
+ function togglePublisherList(event, id) {
+  event.stopPropagation();
+  const next = new Set(expandedPublisherLists);
+  if (next.has(id)) next.delete(id); else next.add(id);
+  expandedPublisherLists = next;
+ }
+
 	$effect(() => { if (focusedRecordId != null) expandedCards = new Set([focusedRecordId]); });
 
 	// True for a card shown because another card links to it, not the card being viewed
@@ -349,7 +368,7 @@
 
 		// Don't collapse if clicking a link (let it work normally)
 		const target = event.target;
-		if (target.closest('a, button, input, select, textarea, [role=button]')) {
+		if (target.closest('a, button, input, select, textarea, details, [role=tooltip], [role=button]')) {
 			return;
 		}
 		// Collapse the card when clicking anywhere else
@@ -1332,7 +1351,9 @@
 						{@const allPublishers = interactionType === 'grant' && Array.isArray(entry.named_organizations) && entry.named_organizations.length ? entry.named_organizations : (entry.organization_publisher_named_in_deal_suit || [])}
 
 							{@const allSources = normalizeSources(entry.sources)}
-                            {@const hasCaseNumber = interactionType === 'lawsuit' && entry.case_number && !['unknown', '(unknown)', '—', 'nan'].includes(String(entry.case_number).trim().toLowerCase())}
+                            {@const embeddedMdl = entry.mdl_number && /-md-\d+/i.test(String(entry.case_number || ''))}
+                            {@const originalDockets = embeddedMdl ? (entry.original_case_dockets || []) : []}
+                            {@const hasCaseNumber = interactionType === 'lawsuit' && !embeddedMdl && entry.case_number && !['unknown', '(unknown)', '—', 'nan'].includes(String(entry.case_number).trim().toLowerCase())}
 
 						{@const parentChildMatches = Array.isArray(entry.parent_child_matches) ? entry.parent_child_matches : []}
 						{@const hierarchyTree = buildHierarchyTree(parentChildMatches, allPublishers)}
@@ -1409,10 +1430,11 @@
 											<div class="header-separator"></div>
 											<div class="header-right-content">
 												{#if Array.isArray(allPublishers) && allPublishers.length > 0}
-													{#each allPublishers as pub}
+													{#each (allPublishers.length <= 15 || expandedPublisherLists.has(row.id) ? allPublishers : allPublishers.slice(0, 3)) as pub}
 														<div class="header-item">{@html highlightEntity(row, pub)}
 {@render entityNetworkIcon(row.id, pub, 'publisher')}</div>
 													{/each}
+{#if allPublishers.length > 15}<button type="button" class="publisher-more" aria-expanded={expandedPublisherLists.has(row.id)} onclick={event => togglePublisherList(event, row.id)}>{expandedPublisherLists.has(row.id) ? 'See less' : `+ See ${allPublishers.length - 3} more`}</button>{/if}
 												{/if}
 											</div>
 										{/if}
@@ -1473,7 +1495,7 @@
                              </GrantPublications>
                             {:else}
 
-							{#each allPublishers as org}
+							{#each (allPublishers.length <= 15 || expandedPublisherLists.has(row.id) ? allPublishers : allPublishers.slice(0, 3)) as org}
 								{@const orgTree = hierarchyTree[org] || {}}
 								{@const hasMatches = Object.keys(orgTree).length > 0 || (orgTree.publications && orgTree.publications.length > 0)}
 								<div class="publisher-item">
@@ -1524,10 +1546,28 @@
 					{/if}
 				</div>
 							{/each}
+{#if allPublishers.length > 15}<button type="button" class="publisher-more expanded-publisher-more" aria-expanded={expandedPublisherLists.has(row.id)} onclick={event => togglePublisherList(event, row.id)}>{expandedPublisherLists.has(row.id) ? 'See less' : `+ See ${allPublishers.length - 3} more publishers`}</button>{/if}
                             {/if}
 						</div>
 					</div>
 
+
+
+
+					</div>
+
+									<!-- Column 2 -->
+									<div class="card-column column-2">
+					<div class="card-field reported-details">
+						<div class="field-label">Reported Details</div>
+						<div class="field-value">
+							<span class="reported-text">
+							{@html highlightText(entry.reported_details || '—')}
+							</span>
+										</div>
+									</div>
+
+{#if interactionType !== 'lawsuit'}
 					<div class="card-field">
 						<div class="field-label">{interactionType === 'lawsuit' ? 'Complaint' : 'Type'}</div>
 						<div class="field-value type-tags-wrapper">
@@ -1546,20 +1586,19 @@
 							{/if}
 						</div>
 					</div>
+{/if}
 
-
-					</div>
-
-									<!-- Column 2 -->
-									<div class="card-column column-2">
-					<div class="card-field reported-details">
-						<div class="field-label">Reported Details</div>
-						<div class="field-value">
-							<span class="reported-text">
-							{@html highlightText(entry.reported_details || '—')}
-							</span>
-										</div>
-									</div>
+<div class:legal-details={interactionType === 'lawsuit'} class:empty-case-details={interactionType !== 'lawsuit'}>
+{#if interactionType === 'lawsuit'}
+ <h3>Case details</h3>
+ {@const claims = normalizeToArray(entry.type).map(value => String(value).trim()).filter(Boolean)}
+ {#if claims.length}
+ <details class="legal-disclosure">
+  <summary><span>Complaint</span><span class="disclosure-action">{claims.length} {claims.length === 1 ? 'claim' : 'claims'} <span class="disclosure-open-label">Show</span><span class="disclosure-close-label">Hide</span></span></summary>
+  <div class="claim-tags type-tags-wrapper">{#each claims as claim}<span class="type-tag">{@html highlightText(claim)}</span>{/each}</div>
+ </details>
+ {/if}
+{/if}
 
 {#if interactionType === 'lawsuit'}
 											{@const progression = getStatusProgression(row)}
@@ -1567,21 +1606,23 @@
 					<div class="card-field">
 													<div class="field-label">Status:</div>
 													<div class="field-value">
-														{#if progression.length > 1}
-															<!-- Same chronology on every card of the case; this card marks its own step -->
+														{#if entry.status && progression.length <= 1}<span class="expanded-status-tag {getStatusClass(entry.status)}">{@html highlightText(entry.status)}</span>{/if}
+ {#if progression.length > 1}
+															<div class="history-disclosure">
+ <!-- Same chronology on every card of the case; this card marks its own step -->
 															<ol class="status-chain">
 																{#each progression as step (step.id)}
 																	{@const isCurrentStep = step.entryIds.includes(row.id)}
 																	<li class="status-chain-step {getStatusClass(step.status)}" class:current={isCurrentStep}>
 																		<span class="status-chain-dot"></span>
 																		{#if isMdlConsolidation(step) && (step.mdl_docket_url || row.mdl_docket_url || step.docket)}
-                                                                    <a href={step.mdl_docket_url || row.mdl_docket_url || step.docket} target="_blank" rel="noopener noreferrer" class="status-chain-label status-chain-jump" onclick={(event) => event.stopPropagation()}>{@html highlightText(step.status)}</a>
+                                                                    <a href={step.mdl_docket_url || row.mdl_docket_url || step.docket} target="_blank" rel="noopener noreferrer" class="status-chain-label status-chain-jump expanded-status-tag {getStatusClass(step.status)}" onclick={(event) => event.stopPropagation()}>{@html highlightText(step.status)}</a>
                                                                 {:else if isCurrentStep}
-																			<span class="status-chain-label">{@html highlightText(step.status || 'Filed')}</span>
+																			<span class="status-chain-label expanded-status-tag {getStatusClass(step.status)}">{@html highlightText(step.status || 'Filed')}</span>
 																		{:else}
 																			<button
 																				type="button"
-																				class="status-chain-label status-chain-jump"
+																				class="status-chain-label status-chain-jump expanded-status-tag {getStatusClass(step.status)}"
 																				title="Go to this update"
 																				onclick={(e) => { e.stopPropagation(); goToCaseEntry(step.id); }}
 																			>{@html highlightText(step.status || 'Filed')}</button>
@@ -1590,11 +1631,7 @@
 																	</li>
 																{/each}
 															</ol>
-														{:else if entry.status}
-															<span class="status-badge {getStatusClass(entry.status)}">
-																<span class="status-indicator"></span>
-																<span class="status-text">{@html highlightText(entry.status)}</span>
-															</span>
+</div>
 														{/if}
 					</div>
 												</div>
@@ -1602,26 +1639,90 @@
 											{#if entry.location}
 					<div class="card-field">
 													<div class="field-label">Location:</div>
-													<div class="field-value">{@html highlightText(entry.location)}</div>
+													<div class="field-value"><span class="type-tag location-tag">{@html highlightText(entry.location)}</span></div>
 												</div>
 											{/if}
 										{/if}
 
-                            {#if hasCaseNumber || entry.mdl_number}
-                                <div class="card-field case-details-field">
-                                    <div class="field-label">Docket(s)</div>
-                                    <div class="field-value">
+</div>
+
+{#if interactionType === 'lawsuit'}
+ {@const filingUrls = normalizeSources(entry.case_filing)}
+ {@const coverageUrls = [...new Set([...normalizeSources(entry.additional_coverage), ...allSources])]}
+ {#if hasCaseNumber || entry.mdl_number || filingUrls.length || coverageUrls.length}
+ <div class="case-documents">
+  <div class="documents-heading"><h4>Case documents &amp; sources</h4>
+   <div class="documents-info" onpointerenter={positionDocumentInfo} onfocusin={positionDocumentInfo}>
+    <button type="button" class="documents-info-button" aria-label="About case documents and sources" aria-describedby={`document-help-${row.id}`}><span aria-hidden="true">i</span></button>
+    <div class="documents-explanation" style:left={`${infoPosition.left}px`} style:top={`${infoPosition.top}px`} style:max-height={`${infoPosition.maxHeight}px`} style:transform={infoPosition.transform} id={`document-help-${row.id}`} role="tooltip">
+     <p><strong>Case filing:</strong> A legal document submitted to the court.</p>
+     <p><strong>Docket:</strong> The complete chronological timeline of the lawsuit, including filings and court activity.</p>
+     <p><strong>MDL Docket:</strong> The docket for related lawsuits grouped for coordinated pretrial proceedings.</p>
+    </div>
+   </div>
+  </div>
+  {#if filingUrls.length}
+   <div class="docket-row"><span class="docket-label">Case filing</span><div class="document-links">
+    {#each filingUrls as url, index}<a href={url} target="_blank" rel="noopener noreferrer" class="source-link">{filingUrls.length > 1 ? `View filing ${index + 1}` : 'View filing'}</a>{/each}
+   </div></div>
+  {/if}
+                                        {#each originalDockets as docket}
+                                            <div class="docket-row"><span class="docket-label">Docket</span>
+                                                {#if docket.url}<a href={docket.url} target="_blank" rel="noopener noreferrer" class="source-link">{@html highlightText(docket.number)}</a>
+                                                {:else}<span class="case-number">{@html highlightText(docket.number)}</span>{/if}
+                                            </div>
+                                        {/each}
                                         {#if hasCaseNumber}
-                                            <div>{#if entry.mdl_number}Case: {/if}
+                                            <div class="docket-row"><span class="docket-label">Docket</span>
                                                 {#if entry.docket}
                                                     <a href={entry.docket} target="_blank" rel="noopener noreferrer" class="source-link">{@html highlightText(String(entry.case_number).trim())}</a>
                                                 {:else}
-                                                    {@html highlightText(String(entry.case_number).trim())}
+                                                    <span class="case-number">{@html highlightText(String(entry.case_number).trim())}</span>
                                                 {/if}
                                             </div>
                                         {/if}
                                         {#if entry.mdl_number}
-                                            <div>MDL:
+                                            <div class="docket-row"><span class="docket-label">MDL Docket</span>
+                                                {#if entry.mdl_docket_url}
+                                                    <a href={entry.mdl_docket_url} target="_blank" rel="noopener noreferrer" class="source-link">{entry.mdl_docket}</a>
+                                                {:else}
+                                                    <span>{entry.mdl_docket}</span>
+                                                {/if}
+                                            </div>
+                                        {/if}
+
+  {#if coverageUrls.length}
+   <div class="docket-row"><span class="docket-label">Additional Coverage</span><div class="document-links coverage-links">
+    {#each coverageUrls as url, index}
+     {@const archiveInfo = getArchiveInfo(url)}
+     <CoveragePreview id={`${row.id}-${index}`} {url} href={archiveInfo.isArchive ? archiveInfo.archiveUrl : url} number={index + 1} source={getSourceDisplayText(url)} />
+    {/each}
+   </div></div>
+  {/if}
+ </div>
+ {/if}
+{:else}
+                            {#if hasCaseNumber || entry.mdl_number}
+                                <div class="card-field case-details-field">
+                                    <div class="field-label">Docket(s)</div>
+                                    <div class="field-value">
+                                        {#each originalDockets as docket}
+                                            <div class="docket-row"><span class="docket-label">Docket</span>
+                                                {#if docket.url}<a href={docket.url} target="_blank" rel="noopener noreferrer" class="source-link">{@html highlightText(docket.number)}</a>
+                                                {:else}<span class="case-number">{@html highlightText(docket.number)}</span>{/if}
+                                            </div>
+                                        {/each}
+                                        {#if hasCaseNumber}
+                                            <div class="docket-row"><span class="docket-label">Docket</span>
+                                                {#if entry.docket}
+                                                    <a href={entry.docket} target="_blank" rel="noopener noreferrer" class="source-link">{@html highlightText(String(entry.case_number).trim())}</a>
+                                                {:else}
+                                                    <span class="case-number">{@html highlightText(String(entry.case_number).trim())}</span>
+                                                {/if}
+                                            </div>
+                                        {/if}
+                                        {#if entry.mdl_number}
+                                            <div class="docket-row"><span class="docket-label">MDL Docket</span>
                                                 {#if entry.mdl_docket_url}
                                                     <a href={entry.mdl_docket_url} target="_blank" rel="noopener noreferrer" class="source-link">{entry.mdl_docket}</a>
                                                 {:else}
@@ -1640,22 +1741,24 @@
                                         <div class="field-label">{linkField.label}:</div>
                                         <div class="field-value">
                                             {#each urls as url}
-                                                <div><a href={url} target="_blank" rel="noopener noreferrer" class="source-link">{getSourceDisplayText(url)}</a></div>
+                                                <div><a href={url} target="_blank" rel="noopener noreferrer" class="source-link">{interactionType === 'lawsuit' && linkField.label === 'Case Filing' ? (urls.length > 1 ? `View case filing ${urls.indexOf(url) + 1}` : 'View case filing') : getSourceDisplayText(url)}</a></div>
                                             {/each}
                                         </div>
                                     </div>
                                 {/if}
                             {/each}
 
-							{#if allSources.length > 0}
+{/if}
+
+							{#if allSources.length > 0 && (interactionType !== 'lawsuit' || interactionTypes.includes('deal') || interactionTypes.includes('grant'))}
 								<div class="citations-section">
 									<div class="citations-label">Read More:</div>
-									<div class="citations">
+									<div class="citations coverage-links">
 										{#each allSources as source, index}
 											{@const archiveInfo = getArchiveInfo(source)}
 											{@const displayUrl = archiveInfo.isArchive ? archiveInfo.archiveUrl : source}
 											{@const displayText = getSourceDisplayText(source)}
-											<a href={displayUrl} target="_blank" rel="noopener noreferrer" class="citation-link">{@html highlightText(displayText)}</a>{#if index < allSources.length - 1}<span class="citation-separator">, </span>{/if}
+											<CoveragePreview id={`read-more-${row.id}-${index}`} url={source} href={displayUrl} number={index + 1} source={displayText} />
 							{/each}
 						</div>
 					</div>
@@ -1688,6 +1791,85 @@
 </div>
 
 <style>
+ .expanded-status-tag {display:inline-flex; align-items:center; gap:.45rem; width:fit-content; padding:.25rem .55rem; background:#f5f5f5; border-radius:5px; font-size:.8rem; line-height:1.5; font-weight:500; text-decoration:none; color:inherit;}
+ .expanded-status-tag::before {content:''; flex:0 0 8px; width:8px; height:8px; border-radius:50%; background:#666; box-shadow:0 0 0 2px #ddd;}
+ .expanded-status-tag.in-progress::before {background:#ffb300;}
+ .expanded-status-tag.settled::before {background:#4caf50;}
+ .expanded-status-tag.dismissed::before {background:#9e9e9e;}
+ .expanded-status-tag.decided::before {background:#254c6f;}
+ .expanded-status-tag.consolidated::before {background:#8d6e63;}
+ .legal-details .status-chain-label.expanded-status-tag {display:inline; font-size:.8rem; padding:0; background:transparent; border-radius:0; text-decoration:none;}
+ .status-chain-label.expanded-status-tag::before {display:none;}
+ .legal-details .status-chain-step .status-chain-dot {background:var(--status-color,#666);}
+ .legal-details button.expanded-status-tag {border:0; cursor:pointer;}
+ .publisher-more {display:inline-flex; align-items:center; width:fit-content; margin-top:.3rem; padding:.2rem 0; border:0; border-radius:0; background:transparent; font-family:inherit; font-size:.8rem; font-weight:600; line-height:1.5; letter-spacing:normal; color:#254c6f; cursor:pointer; text-decoration:underline; text-underline-offset:4px;}
+ .news-org-field .field-value > .expanded-publisher-more {margin-top:-.2rem; padding:0; align-self:flex-start;}
+ .news-org-field .publisher-item:has(+ .expanded-publisher-more) {margin-bottom:0;}
+ .news-org-field .publisher-item:has(+ .expanded-publisher-more) > .field-item {margin-bottom:0;}
+ .publisher-more:hover {color:#254c6f; text-decoration:underline; text-underline-offset:3px;}
+
+ .publisher-more:focus-visible {outline:2px solid #254c6f; outline-offset:3px;}
+
+ .case-documents {padding:1rem; font-family:inherit; font-size:.8rem; font-weight:400; line-height:1.5; color:#333;}
+ .legal-details,.case-documents {background:#fafbfc; border-radius:6px; box-sizing:border-box;}
+ .documents-heading {display:flex; align-items:center; gap:.4rem; margin-bottom:.65rem;}
+ .documents-heading h4 {margin:0;}
+ .documents-info {position:relative;}
+ .documents-info-button {display:grid; place-items:center; width:18px; height:18px; border:1px solid #9aa5ae; border-radius:50%; color:#65717c; font-size:11px; font-family:serif; font-weight:700; cursor:pointer; list-style:none;}
+ 
+ .documents-info-button:focus-visible {outline:2px solid #254c6f; outline-offset:3px;}
+ .documents-explanation {visibility:hidden; opacity:0; position:fixed; z-index:100; width:min(280px,calc(100vw - 32px)); box-sizing:border-box; overflow-y:auto; overscroll-behavior:contain; padding:.75rem; background:white; border:1px solid #dce1e5; border-radius:5px; box-shadow:0 3px 12px #0001; font-size:.75rem; line-height:1.5; color:#505d67;}
+ .documents-info:hover .documents-explanation,.documents-info:focus-within .documents-explanation {visibility:visible; opacity:1;}
+ .documents-info-button {background:transparent; padding:0;}
+ .documents-explanation::before {content:""; position:absolute; left:0; right:0; top:-8px; height:8px;}
+ .documents-explanation p {margin:0 0 .5rem;}
+ .documents-explanation p:last-child {margin:0;}
+ .document-links {display:flex; flex-direction:column; gap:.15rem; min-width:0;}
+ .empty-case-details:empty {display:none;}
+ .card-column.column-2:has(.empty-case-details) .citations-section {margin-top:-.5rem;}
+ .card-column .citations-section {flex-direction:row; align-items:center; flex-wrap:wrap; gap:.5rem;}
+ .card-column .citations-label {margin:0;}
+ .citations.coverage-links {display:flex; flex-wrap:wrap; gap:.3rem; align-items:center;}
+ .document-links.coverage-links {flex-direction:row; flex-wrap:wrap; gap:.3rem;}
+ .case-documents .docket-row > span:not(.docket-label) {font:inherit;}
+
+ .legal-details {font-family:inherit; margin-top:.25rem; border-radius:6px; padding:1rem; cursor:default;}
+ .legal-details h3,.documents-heading h4 {font-family:inherit; font-size:.75rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; line-height:1.4; color:#56616b;}
+ .legal-details h3 {margin:0 0 .65rem; padding:0;}
+
+ .legal-details .card-field {padding:.55rem 0; gap:.35rem;}
+ .legal-details > .card-field:last-child {padding-bottom:0;}
+ .legal-details > .card-field:last-child {border-bottom:0;}
+ .legal-details .field-label {font-family:inherit; font-size:.8rem; font-weight:500; line-height:1.5; color:#56616b; text-transform:none; letter-spacing:normal;}
+ .legal-details .field-value {font-family:inherit; font-size:.8rem; font-weight:400; line-height:1.5;}
+ .legal-disclosure {width:100%; margin:0; padding:0 0 .55rem;}
+ .legal-disclosure summary {display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:.35rem .75rem; cursor:pointer; font-size:.8rem; font-weight:500; color:#394651; line-height:1.5; list-style:none;}
+ .legal-disclosure summary::-webkit-details-marker {display:none;}
+ .disclosure-action {display:inline-flex; align-items:center; gap:.4rem; color:#65717c; font-size:.72rem; font-weight:400;}
+ .disclosure-open-label,.disclosure-close-label {color:#254c6f; font-weight:600; text-decoration:underline; text-underline-offset:3px;}
+ .disclosure-close-label {display:none;}
+ .legal-disclosure[open] .disclosure-open-label {display:none;}
+ .legal-disclosure[open] .disclosure-close-label {display:inline;}
+ .legal-disclosure summary:focus-visible {outline:2px solid #254c6f; outline-offset:4px; border-radius:2px;}
+ .legal-details .status-text,.legal-details .status-chain-label,.legal-details .status-chain-date {font-family:inherit; font-size:.8rem; line-height:1.5;}
+ .legal-details .status-text {font-weight:400;}
+ .legal-details .status-chain-date {font-size:.7rem;}
+ .legal-details .status-chain-step.current .status-chain-label {font-weight:600;}
+ .claim-tags {display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.65rem;}
+ .history-disclosure {margin-top:0; padding:0; border:0;}
+ .history-disclosure .status-chain {margin-top:0;}
+ .docket-row {display:grid; grid-template-columns:6.25rem minmax(0,1fr); align-items:baseline; gap:.5rem; padding:.3rem 0;}
+ .case-documents .case-number {font:inherit; overflow-wrap:anywhere;}
+ .docket-label {font-family:inherit; font-size:.8rem; font-weight:500; line-height:1.5; color:#56616b;}
+ .legal-details .source-link,.case-documents .source-link {font-family:inherit; font-size:.8rem; font-weight:400; line-height:1.5; overflow-wrap:anywhere; text-decoration:underline; text-decoration-color:#c5d1dc; text-underline-offset:3px;}
+ @media(max-width:480px) {
+  .legal-details {padding:.85rem .75rem;}
+  .case-documents {padding:.85rem .75rem;}
+  .docket-row {grid-template-columns:1fr; gap:.1rem; padding:.35rem 0;}
+ }
+
+
+
 
 	.card-view {
 		width: 100%;
@@ -2659,27 +2841,8 @@
 		overflow-wrap: break-word;
 	}
 
-	.citation-link {
-		color: #254c6f;
-		text-decoration: none;
-		font-size: 0.9rem;
-		font-weight: 400;
-		transition: color 0.2s ease;
-		display: inline-block;
-		overflow-wrap: anywhere;
-		word-break: normal;
-		hyphens: none;
-	}
 
-	.citation-link:hover {
-		color: #1a3a52;
-		text-decoration: underline;
-	}
 
-	.citation-separator {
-		color: #666;
-		margin: 0 0.15rem;
-	}
 
 	.status-badge {
 		display: inline-flex;
