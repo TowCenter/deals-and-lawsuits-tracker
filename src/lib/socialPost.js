@@ -9,15 +9,17 @@ export function buildSocialPost(row, url = '') {
  const publishers = names(row.organization_publisher_named_in_deal_suit).length ? names(row.organization_publisher_named_in_deal_suit) : names(row.plaintiff);
  const publisherTitle = publishers.length > 2 ? `${publishers.length} news publishers` : joinNames(publishers);
  const platformTitle = joinNames(platforms);
- let title;
- if (types.length === 1 && types[0] === 'deal' && platformTitle && publisherTitle) {
-  title = `${platformTitle} — deal with ${publisherTitle}`;
- } else {
-  const entities = [platformTitle, publisherTitle].filter(Boolean).join(' / ');
-  const interaction = types.map(type => type.charAt(0).toUpperCase() + type.slice(1)).join(' and ');
-  title = [entities, interaction].filter(Boolean).join(' — ') || 'AI Deals and Disputes update';
- }
- return `${title}\n\n${String(row.reported_details || '').trim()}${url ? `\n\n${url}` : ''}`;
+ const plural = publishers.length > 1;
+ const actions = {
+  deal: plural ? 'sign deals with' : 'signs deal with',
+  lawsuit: plural ? 'sue' : 'sues',
+  grant: plural ? 'receive grants from' : 'receives grant from'
+ };
+ const clauses = types.filter(type => actions[type]).map(type => `${actions[type]} ${platformTitle}`);
+ const title = publisherTitle && platformTitle && clauses.length
+  ? `${publisherTitle} ${joinNames(clauses)}`
+  : 'AI Deals and Disputes update';
+ return `${title} -- @towcenter.bsky.social See more in the Deals and Disputes Tracker${url ? ` ${url}` : ''}`;
 }
 
 export function cardShareUrl(pageUrl, id) {

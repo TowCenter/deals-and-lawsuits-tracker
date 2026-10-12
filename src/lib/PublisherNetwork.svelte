@@ -517,7 +517,7 @@
 {/snippet}
 
 <dialog style:visibility={graphReady ? 'visible' : 'hidden'} class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (!suppressGraphClick && event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
- <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle"><strong><em>Publicly disclosed</em></strong> interactions with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
+ <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle"><strong><em>Publicly disclosed</em></strong> relations with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
 
@@ -578,7 +578,7 @@
  {#each renderedCompanies as company (company)}
   {@const platform = platformNodes.get(company)}
   {#if !showVenn || hoveredPlatform === company || selectedPlatform === company || (focusedEntity?.type === 'platform' && normalize(focusedEntity.name) === normalize(company))}
-  <div class="floating-node-label platform-label" class:muted-label={highlighting && !highlightedCompanies.has(company)} style:left="{platform.x + platform.r}px" style:top="{platform.y + platform.r}px" style:font-size="{14 / (mapScale * cameraZoom)}px" style:width="{180 / (mapScale * cameraZoom)}px">{company}{#if canFocusSelection && selectedEntity.type === 'platform' && company === selectedPlatform}{@render exploreSelection(selectedEntity.name)}{/if}</div>
+  <div class="floating-node-label platform-label" class:muted-label={highlighting && !highlightedCompanies.has(company)} style:left="{platform.x + platform.r}px" style:top="{platform.y + platform.r}px" style:font-size="{(viewportWidth < 500 ? 12 : 14) / (mapScale * cameraZoom)}px" style:width="{Math.min(180 / (mapScale * cameraZoom), platform.width * 1.1)}px">{company}{#if canFocusSelection && selectedEntity.type === 'platform' && company === selectedPlatform}{@render exploreSelection(selectedEntity.name)}{/if}</div>
   {/if}
  {/each}
  </div></div>
@@ -608,7 +608,7 @@
  {#if displayNodes.some(node => node.hasChildren)}
   <div class="ownership-legend">
    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14"/><circle cx="11" cy="18" r="5"/><circle cx="22" cy="18" r="4"/></svg>
-   <span>Circles within a circle represent organizations owned by the enclosing organization.</span>
+   <span>Circles within a circle represent subsidiaries owned by the enclosing organization.</span>
   </div>
  {/if}
  </div>
@@ -626,9 +626,8 @@
  dialog { width:calc(100vw - 32px); max-width:1600px; height:95dvh; max-height:95dvh; margin:auto; overflow-y:auto; scrollbar-gutter:stable; padding:1.5rem; border:1px solid #ddd; background:#fff; color:#111; box-sizing:border-box; font:inherit; box-shadow:0 8px 24px #0002; }
  dialog.expanded { width:calc(100vw - 16px); height:calc(100dvh - 16px); max-width:none; max-height:none; margin:auto; }
  dialog::backdrop { background:#14182048; }
- header { position:relative; display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:1rem; margin-bottom:.75rem; }
+ header { position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:1rem; margin-bottom:.75rem; }
  header.has-selection { grid-template-columns:minmax(0,1fr) minmax(320px,35%); }
- header:not(.has-selection) .window-controls { position:absolute; right:0; top:0; }
  .network-heading { min-width:0; text-align:center; }
  .network-subtitle { margin:.3rem 0 0; color:#666; font-size:.75rem; font-weight:500; letter-spacing:.09em; text-transform:uppercase; line-height:1.3; }
  h2 { margin:0; font-size:1.4rem; line-height:1.25; font-weight:650; }
@@ -649,7 +648,7 @@
  .legend { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; margin:1rem 0 .25rem; justify-content:center; }
  .ownership-legend { display:flex; align-items:center; justify-content:center; gap:.5rem; margin:.5rem 0 .25rem; color:#666; font-size:.75rem; line-height:1.4; }
  .ownership-legend svg { position:static; flex:0 0 28px; width:28px; height:28px; fill:#f4f6f8; stroke:#8b969f; stroke-width:1; }
- .filter-buttons { display:flex; align-items:center; gap:.5rem; }
+ .filter-buttons { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:.5rem; }
  .fit-view { position:absolute; right:12px; top:12px; z-index:70; display:flex; align-items:center; justify-content:center; width:40px; height:40px; color:#254c6f; background:#fff; border:1px solid #cbd5de; border-radius:6px; padding:8px; cursor:pointer; box-shadow:0 1px 4px #0001; }
  .fit-view svg { position:static; width:22px; height:22px; }
  .fit-view:hover { background:#f0f5f9; border-color:#8da6bb; }
@@ -715,20 +714,21 @@
  .selected-record :global(.month-group) { gap:1rem; }
  .selected-record :global(.timeline-row) { display:block; margin:0; padding:0; }
  .selected-record :global(.month-label),.selected-record :global(.timeline-divider) { display:none; }
- @media(max-width:700px) {
-  dialog,dialog.expanded { width:100%; height:100dvh; max-height:100dvh; max-width:none; margin:0; padding:1rem; overflow-y:auto; overscroll-behavior:contain; }
+ @media(max-width:900px) {
+  dialog,dialog.expanded { width:100%; height:100dvh; max-height:100dvh; max-width:none; margin:0; padding:.75rem; scrollbar-gutter:auto; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; }
   header,header.has-selection { grid-template-columns:1fr; gap:.5rem; }
-  header:not(.has-selection) .window-controls { position:static; }
-  .window-controls { justify-content:center; }
+  header { position:sticky; top:-.75rem; z-index:80; background:#fff; padding:.5rem 0; }
+  .window-controls { grid-row:1; justify-content:flex-end; }
   h2 { font-size:1.1rem; overflow-wrap:anywhere; }
   .window-controls { gap:.25rem; }
-  .resize,.close { min-height:44px; }
+  .resize,.close,.interaction-tag { min-height:44px; }
   .routing-status { margin:0 0 .5rem; font-size:.8rem; color:#555; }
- .legend { flex-wrap:wrap; }
+  .legend { gap:.5rem; }
   .network-content.has-selection { grid-template-columns:minmax(0,1fr); }
-  .scroll,dialog.expanded .scroll { height:60dvh; min-height:240px; }
+  .scroll,dialog.expanded .scroll { height:55dvh; min-height:min(240px,45dvh); }
   .network-content.has-selection .scroll { height:45dvh; }
   .selected-record,dialog.expanded .selected-record { max-height:none; overflow:visible; }
+  .selected-record { overflow-wrap:anywhere; }
   .selected-record :global(.card-header) { flex-wrap:wrap; }
   .selected-record :global(.header-content) { min-width:0; overflow-wrap:anywhere; }
   path.hit-area { stroke-width:20; }

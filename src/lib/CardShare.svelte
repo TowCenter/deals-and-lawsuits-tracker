@@ -32,7 +32,7 @@
 
 <svelte:window onpointerdown={event => { if (open && control && !control.contains(event.target)) open = false; }} onkeydown={event => { if (event.key === 'Escape') open = false; }} />
 <div class="share-control" bind:this={control}>
- <button class="share-icon" aria-label="Share reported details" title="Share reported details" aria-expanded={open} onclick={() => { open = !open; message = ''; }}>
+ <button class="share-icon" aria-label="Share this update" title="Share this update" aria-expanded={open} onclick={() => { open = !open; message = ''; }}>
   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4"/>
   </svg>

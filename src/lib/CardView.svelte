@@ -1421,7 +1421,6 @@
 									<div class="header-right">
 										{#if !isCardExpanded(row.id) && interactionTypes.includes('lawsuit') && entry.status}
 											<span class="status-badge header-status {getStatusClass(entry.status)}" aria-label="Status: {entry.status}">
-												<span class="status-indicator"></span>
 												<span class="status-text">{@html highlightText(entry.status)}</span>
 											</span>
 										{/if}
