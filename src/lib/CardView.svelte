@@ -1612,7 +1612,7 @@
                                     <div class="field-label">Docket(s)</div>
                                     <div class="field-value">
                                         {#if hasCaseNumber}
-                                            <div>Case:
+                                            <div>{#if entry.mdl_number}Case: {/if}
                                                 {#if entry.docket}
                                                     <a href={entry.docket} target="_blank" rel="noopener noreferrer" class="source-link">{@html highlightText(String(entry.case_number).trim())}</a>
                                                 {:else}
