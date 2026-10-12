@@ -1569,7 +1569,7 @@
 
 {#if interactionType !== 'lawsuit'}
 					<div class="card-field">
-						<div class="field-label">{interactionType === 'lawsuit' ? 'Complaint' : 'Type'}</div>
+						<div class="field-label">{interactionType === 'lawsuit' ? 'Complaint(s)' : 'Type'}</div>
 						<div class="field-value type-tags-wrapper">
 							{#if Array.isArray(entry.type) && entry.type.length > 0}
 								{#each entry.type as type}
@@ -1594,7 +1594,7 @@
  {@const claims = normalizeToArray(entry.type).map(value => String(value).trim()).filter(Boolean)}
  {#if claims.length}
  <details class="legal-disclosure">
-  <summary><span>Complaint</span><span class="disclosure-action">{claims.length} {claims.length === 1 ? 'claim' : 'claims'} <span class="disclosure-open-label">Show</span><span class="disclosure-close-label">Hide</span></span></summary>
+  <summary><span class="field-label">Complaint(s)</span><span class="disclosure-action">{claims.length} {claims.length === 1 ? 'claim' : 'claims'} <span class="disclosure-open-label">Show</span><span class="disclosure-close-label">Hide</span></span></summary>
   <div class="claim-tags type-tags-wrapper">{#each claims as claim}<span class="type-tag">{@html highlightText(claim)}</span>{/each}</div>
  </details>
  {/if}
@@ -1842,11 +1842,11 @@
  .legal-details > .card-field:last-child {border-bottom:0;}
  .legal-details .field-label {font-family:inherit; font-size:.8rem; font-weight:500; line-height:1.5; color:#56616b; text-transform:none; letter-spacing:normal;}
  .legal-details .field-value {font-family:inherit; font-size:.8rem; font-weight:400; line-height:1.5;}
- .legal-disclosure {width:100%; margin:0; padding:0 0 .55rem;}
- .legal-disclosure summary {display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:.35rem .75rem; cursor:pointer; font-size:.8rem; font-weight:500; color:#394651; line-height:1.5; list-style:none;}
+ .legal-disclosure {width:100%; margin:0; padding:.55rem 0;}
+ .legal-disclosure summary {display:flex; flex-direction:column; align-items:flex-start; gap:.35rem; cursor:pointer; font-family:inherit; font-size:.8rem; font-weight:400; color:#333; line-height:1.5; list-style:none;}
  .legal-disclosure summary::-webkit-details-marker {display:none;}
- .disclosure-action {display:inline-flex; align-items:center; gap:.4rem; color:#65717c; font-size:.72rem; font-weight:400;}
- .disclosure-open-label,.disclosure-close-label {color:#254c6f; font-weight:600; text-decoration:underline; text-underline-offset:3px;}
+ .disclosure-action {display:inline-flex; align-items:baseline; gap:.4rem; font-family:inherit; color:#333; font-size:.8rem; line-height:1.5; font-weight:400;}
+ .disclosure-open-label,.disclosure-close-label {color:#254c6f; font-weight:400; text-decoration:underline; text-underline-offset:3px;}
  .disclosure-close-label {display:none;}
  .legal-disclosure[open] .disclosure-open-label {display:none;}
  .legal-disclosure[open] .disclosure-close-label {display:inline;}
@@ -1855,7 +1855,8 @@
  .legal-details .status-text {font-weight:400;}
  .legal-details .status-chain-date {font-size:.7rem;}
  .legal-details .status-chain-step.current .status-chain-label {font-weight:600;}
- .claim-tags {display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.65rem;}
+ .claim-tags {display:flex; flex-wrap:wrap; gap:.25rem; margin-top:.4rem;}
+ .claim-tags .type-tag {margin:0;}
  .history-disclosure {margin-top:0; padding:0; border:0;}
  .history-disclosure .status-chain {margin-top:0;}
  .docket-row {display:grid; grid-template-columns:6.25rem minmax(0,1fr); align-items:baseline; gap:.5rem; padding:.3rem 0;}
