@@ -517,7 +517,7 @@
 {/snippet}
 
 <dialog style:visibility={graphReady ? 'visible' : 'hidden'} class:expanded bind:this={dialog} onclose={onclose} onclick={event => { if (event.target === dialog) dialog.close(); else if (!suppressGraphClick && event.target instanceof Element && event.target.closest('.scroll') && !event.target.closest('g, button, .ownership-node, .company-node')) clearSelection(); }} onkeydown={event => { if (event.key === 'Escape') event.stopPropagation(); }} aria-label="Publisher network map">
- <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle"><strong><em>Publicly disclosed</em></strong> relations with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="resize" onclick={() => expanded = !expanded} aria-label={expanded ? "Restore popup size" : "Expand popup"} aria-pressed={expanded}>{expanded ? "Restore" : "Expand"}</button><button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
+ <header class:has-selection={panelRecords.length > 0}><div class="network-heading"><h2 title={namedPublishers.join(', ')}>{networkTitle}’s</h2><p class="network-subtitle"><strong><em>Publicly disclosed</em></strong> relations with {focusedEntity?.type === 'platform' ? 'news publishers' : 'AI platforms'}</p>{#if !focusedEntity}<p class="record-context">{recordContext}</p>{/if}</div><div class="window-controls">{#if navigationHistory.length}<button class="resize" onclick={navigateBack} aria-label="Return to previous network">Back</button>{/if}<button class="close" onclick={() => dialog.close()} aria-label="Close network map">×</button></div></header>
 
 
 
@@ -588,8 +588,8 @@
   </button>
  {/if}
  </div>
- <div class="legend" aria-label="Filter relationship types">
-  <span class="legend-hint">Filter relationships:</span>
+ <div class="legend" aria-label="Filter by Relation Type">
+  <span class="legend-hint">Filter by Relation Type:</span>
   <div class="filter-buttons" role="group" aria-label="Relationship filters">
   {#each ['lawsuit', 'deal', 'grant'] as interaction}
    <button type="button" disabled={!availableKinds.has(interaction)} title={availableKinds.has(interaction) ? `Filter ${interaction}s; click again to show all` : `No ${interaction}s in this view`} class="interaction-tag {interaction}" aria-pressed={selectedKind === interaction}

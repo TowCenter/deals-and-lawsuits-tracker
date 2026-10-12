@@ -3,7 +3,7 @@ import { parseArray } from './utils.js';
 const names = value => [...new Set(parseArray(value).map(String).map(name => name.trim()).filter(name => name && name.toLowerCase() !== '(unknown)'))];
 const joinNames = values => values.length === 2 ? values.join(' and ') : values.join(', ');
 
-export function buildSocialPost(row, url = '') {
+export function buildSocialPost(row, url = '', platform = 'bluesky') {
  const types = names(row.interaction).map(type => type.toLowerCase());
  const platforms = names(row.platform).length ? names(row.platform) : names(row.defendant);
  const publishers = names(row.organization_publisher_named_in_deal_suit).length ? names(row.organization_publisher_named_in_deal_suit) : names(row.plaintiff);
@@ -16,10 +16,21 @@ export function buildSocialPost(row, url = '') {
   grant: plural ? 'receive grants from' : 'receives grant from'
  };
  const clauses = types.filter(type => actions[type]).map(type => `${actions[type]} ${platformTitle}`);
- const title = publisherTitle && platformTitle && clauses.length
+ const status = String(row.status || '').trim();
+ const isStatusUpdate = types.includes('lawsuit') && status
+  && !/^(filed|initiated(?:\s*\/\s*in progress)?)$/i.test(status);
+ let title = publisherTitle && platformTitle && clauses.length
   ? `${publisherTitle} ${joinNames(clauses)}`
   : 'AI Deals and Disputes update';
- return `${title} -- @towcenter.bsky.social See more in the Deals and Disputes Tracker${url ? ` ${url}` : ''}`;
+ if (isStatusUpdate) {
+  const parties = publisherTitle && platformTitle ? `${publisherTitle} vs ${platformTitle}` : 'Existing lawsuit';
+  const otherActions = types.filter(type => type !== 'lawsuit' && actions[type])
+   .map(type => `${publisherTitle} ${actions[type]} ${platformTitle}`);
+  title = `Lawsuit update: ${parties} — ${status}`;
+  if (publisherTitle && platformTitle && otherActions.length) title += `; ${joinNames(otherActions)}`;
+ }
+ const attribution = {bluesky: '@towcenter.bsky.social', x: '@TowCenter', linkedin: 'Tow Center for Digital Journalism'}[platform] || 'Tow Center for Digital Journalism';
+ return `${title} -- ${attribution}\n\nSee more in the Deals and Disputes Tracker${url ? `\n${url}` : ''}`;
 }
 
 export function cardShareUrl(pageUrl, id) {

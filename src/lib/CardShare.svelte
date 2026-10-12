@@ -6,7 +6,15 @@
  onMount(() => {
   pageUrl = window.location.href;
  });
- const text = $derived(buildSocialPost(row, cardShareUrl(pageUrl, row.id)));
+ let platform = $state('bluesky');
+ const text = $derived(buildSocialPost(row, cardShareUrl(pageUrl, row.id), platform));
+ const shareLink = $derived(cardShareUrl(pageUrl, row.id));
+ async function prepareShare(destination) {
+  platform = destination;
+  postCopied = false;
+  message = '';
+
+ }
  let open = $state(false);
  let message = $state('');
  let postCopied = $state(false);
@@ -20,7 +28,7 @@
  async function copyText() {
   try {
    await navigator.clipboard.writeText(text);
-   message = '';
+   message = platform === 'linkedin' ? 'Post copied. Open LinkedIn and paste it into the post composer.' : '';
    postCopied = true;
    clearTimeout(copyReset);
    copyReset = setTimeout(() => postCopied = false, 2000);
@@ -41,12 +49,13 @@
   <div class="share-message">
    <div class="share-heading"><strong>Share this update</strong><button class="close-share" aria-label="Close sharing" onclick={() => open = false}>×</button></div>
    <div class="social-options" aria-label="Share options">
-    <a href={`https://bsky.app/intent/compose?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer"><span class="brand bluesky" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 11C9 6 3 2 2 5c-1 4 0 8 5 8-6 2-3 8 1 5l4-4 4 4c4 3 7-3 1-5 5 0 6-4 5-8-1-3-7 1-10 6Z"/></svg></span><span class="social-label">Bluesky</span></a>
-    <a href={`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer"><span class="brand x" aria-hidden="true">𝕏</span><span class="social-label">X</span></a>
+    <a href={`https://bsky.app/intent/compose?text=${encodeURIComponent(buildSocialPost(row, shareLink, 'bluesky'))}`} onclick={() => prepareShare('bluesky')} target="_blank" rel="noopener noreferrer"><span class="brand bluesky" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 11C9 6 3 2 2 5c-1 4 0 8 5 8-6 2-3 8 1 5l4-4 4 4c4 3 7-3 1-5 5 0 6-4 5-8-1-3-7 1-10 6Z"/></svg></span><span class="social-label">Bluesky</span></a>
+    <a href={`https://x.com/intent/tweet?text=${encodeURIComponent(buildSocialPost(row, shareLink, 'x'))}`} onclick={() => prepareShare('x')} target="_blank" rel="noopener noreferrer"><span class="brand x" aria-hidden="true">𝕏</span><span class="social-label">X</span></a>
+    <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareLink)}`} onclick={() => prepareShare('linkedin')} target="_blank" rel="noopener noreferrer"><span class="brand linkedin" aria-hidden="true">in</span><span class="social-label">LinkedIn</span></a>
    </div>
    <div class="link-copy"><input readonly aria-label="Card link" value={cardShareUrl(pageUrl, row.id)} onclick={event => event.currentTarget.select()} /><button onclick={copyLink}>Copy</button></div>
    <div class="draft">
-    <div class="preview-heading"><span>Post preview</span><button class="copy-draft" onclick={copyText} aria-label={postCopied ? 'Post copied' : 'Copy post text'} title={postCopied ? 'Post copied' : 'Copy post text'}>{#if postCopied}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>{:else}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/></svg>{/if}</button></div>
+    <div class="preview-heading"><label for={`share-platform-${row.id}`}>Post preview</label><select id={`share-platform-${row.id}`} aria-label="Post platform" bind:value={platform} onchange={() => { postCopied = false; message = ''; }}><option value="bluesky">Bluesky</option><option value="x">X</option><option value="linkedin">LinkedIn</option></select><button class="copy-draft" onclick={copyText} aria-label={postCopied ? 'Post copied' : 'Copy post text'} title={postCopied ? 'Post copied' : 'Copy post text'}>{#if postCopied}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>{:else}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/></svg>{/if}</button></div>
     <textarea readonly aria-label="Post draft" value={text} onclick={event => event.currentTarget.select()}></textarea>
    </div>
    {#if message}<span role="status">{message}</span>{/if}
@@ -60,11 +69,13 @@
  .share-icon:hover, .share-icon[aria-expanded="true"] {color: #315a7a; background: #f5f7fa;}
  .share-message {position: absolute; right: 0; top: 46px; width: min(275px, 78vw); padding: .8rem; box-sizing: border-box; font-family: inherit; background: white; border: 1px solid #e0e0e0; border-radius: 0; box-shadow: 0 3px 12px #00000012; font-size: .8rem; color: #333;}
  .share-message::before {content: ''; position: absolute; right: 10px; top: -7px; width: 13px; height: 13px; background: white; transform: rotate(45deg); border-left: 1px solid #e0e0e0; border-top: 1px solid #e0e0e0;}
- .social-options {display: grid; grid-template-columns: repeat(2, 1fr); gap: .35rem; margin: .75rem 0;}
- .social-options a {display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 5px; width: 100%; box-sizing: border-box; font: inherit; font-weight: 600; color: #777; background: none; border: 0; padding: .45rem .2rem; text-decoration: none; cursor: pointer; text-align: left; border-radius: 0; background: #fafafa; border: 1px solid #e0e0e0;}
+ .social-options {display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; margin: .75rem 0;}
+ .social-options a {display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 5px; width: 100%; box-sizing: border-box; font: inherit; font-weight: 600; color: #777; background: none; border: 0; padding: .35rem .15rem; text-decoration: none; cursor: pointer; text-align: left; border-radius: 0; background: #fafafa; border: 1px solid #e0e0e0;}
  .social-options a:hover {background: #f0f0f0; color: #333;}
- .brand {display: grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px; font-size: 27px; line-height: 1; font-weight: 700;}
- .brand svg {width: 23px; height: 23px;}
+ .brand {display: grid; place-items: center; width: 22px; height: 22px; flex: 0 0 22px; font-size: 24px; line-height: 1; font-weight: 700;}
+ .brand svg {width: 21px; height: 21px;}
+ .linkedin {color:#0a66c2; font-size:22px;}
+ .preview-heading select {min-width:0; font:inherit; padding:.2rem; border:1px solid #ddd; background:white; color:#333;}
  .bluesky {color: #168bfa;} .x {color: #222;}
  .share-heading {display: flex; align-items: center; justify-content: space-between; font-size: .8rem; letter-spacing: .5px; color: #333;}
  .close-share {border: 0; background: none; color: #777; font-size: 25px; cursor: pointer; padding: 0 3px;}
