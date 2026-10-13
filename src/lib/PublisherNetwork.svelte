@@ -747,13 +747,13 @@
  dialog,dialog.expanded { overflow:hidden; scrollbar-gutter:auto; }
  dialog[open] { display:flex; flex-direction:column; }
  header,.routing-status { flex-shrink:0; }
- .network-content { flex:1; min-height:0; grid-template-rows:minmax(0,1fr); }
- .graph-column { display:flex; flex-direction:column; min-height:0; }
+ .network-content { flex:1; min-height:0; overflow:hidden; grid-template-rows:minmax(0,1fr); }
+ .graph-column { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
  .scroll,dialog.expanded .scroll,.network-content.has-selection .scroll { flex:1; height:auto; min-height:0; }
  .legend,.inheritance-key,.ownership-legend,.network-branding { flex-shrink:0; }
- .selected-record,dialog.expanded .selected-record { min-height:0; max-height:100%; overflow:auto; scrollbar-width:none; }
+ .selected-record,dialog.expanded .selected-record { min-height:0; height:100%; max-height:100%; overflow:auto; scrollbar-width:none; position:relative; }
  .selected-record::-webkit-scrollbar { display:none; }
- @media (max-width:700px) {
+ @media (max-width:900px) {
   .network-content.has-selection { grid-template-rows:minmax(0,1fr) minmax(0,.65fr); }
   .legend { margin-top:.5rem; }
   .network-branding { margin-top:.35rem; }
