@@ -1,4 +1,5 @@
 <script>
+ import towLogo from '../../demo-app/src/lib/assets/tow-center-horizontal.png';
  import { createEntityNetworkIndex, entityKey, networkEntries, platformConnectionNames } from './entityNetwork.js';
  import { layoutVennNetwork } from './vennNetwork.js';
  import { groupNetworkConnections } from './networkConnectionGroups.js';
@@ -589,7 +590,7 @@
  {/if}
  </div>
  <div class="legend" aria-label="Filter by Relation Type">
-  <span class="legend-hint">Filter by Relation Type:</span>
+  <span class="legend-hint">Filter by relationship:</span>
   <div class="filter-buttons" role="group" aria-label="Relationship filters">
   {#each ['lawsuit', 'deal', 'grant'] as interaction}
    <button type="button" disabled={!availableKinds.has(interaction)} title={availableKinds.has(interaction) ? `Filter ${interaction}s; click again to show all` : `No ${interaction}s in this view`} class="interaction-tag {interaction}" aria-pressed={selectedKind === interaction}
@@ -608,9 +609,10 @@
  {#if displayNodes.some(node => node.hasChildren)}
   <div class="ownership-legend">
    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14"/><circle cx="11" cy="18" r="5"/><circle cx="22" cy="18" r="4"/></svg>
-   <span>Circles within a circle represent subsidiaries of the enclosing organization.</span>
+   <span>Nested circles represent subsidiaries.</span>
   </div>
  {/if}
+ <div class="network-branding"><img class="tow-watermark" src={towLogo} alt="Tow Center for Digital Journalism" draggable="false" /><div class="network-source"><span class="as-of-date">Data as of 10/13/26</span><a href="https://tow.cjr.org/ai-deals-lawsuits/" target="_blank" rel="noopener noreferrer">tow.cjr.org/ai-deals-lawsuits</a></div></div>
  </div>
 
  {#if panelRecords.length}
@@ -629,7 +631,7 @@
  header { position:relative; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:1rem; margin-bottom:.75rem; }
  header.has-selection { grid-template-columns:minmax(0,1fr) minmax(320px,35%); }
  .network-heading { min-width:0; text-align:center; }
- .network-subtitle { margin:.3rem 0 0; color:#666; font-size:.75rem; font-weight:500; letter-spacing:.09em; text-transform:uppercase; line-height:1.3; }
+ .network-subtitle { margin:.3rem 0 0; color:#666; font-size:.75rem; font-weight:500; letter-spacing:.035em; text-transform:none; line-height:1.3; }
  h2 { margin:0; font-size:1.4rem; line-height:1.25; font-weight:650; }
  .record-context { margin:.4rem 0 0; font-size:.8rem; color:#555; }
  .venn-title { font-family:inherit; font-weight:600; letter-spacing:.025em; pointer-events:none; }
@@ -645,7 +647,7 @@
  .resize { min-height:36px; font:inherit; font-size:.75rem; border:1px solid #ddd; background:#fff; color:#254c6f; padding:.25rem .6rem; cursor:pointer; }
  .close { min-width:40px; min-height:40px; border:0; background:none; font-size:1.2rem; cursor:pointer; }
  .routing-status { margin:0 0 .5rem; font-size:.8rem; color:#555; }
- .legend { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; margin:1rem 0 .25rem; justify-content:center; }
+ .legend { display:flex; align-items:center; flex-wrap:wrap; gap:.6rem; margin:.65rem 0 .2rem; justify-content:center; }
  .ownership-legend { display:flex; align-items:center; justify-content:center; gap:.5rem; margin:.5rem 0 .25rem; color:#666; font-size:.75rem; line-height:1.4; }
  .ownership-legend svg { position:static; flex:0 0 28px; width:28px; height:28px; fill:#f4f6f8; stroke:#8b969f; stroke-width:1; }
  .filter-buttons { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:.5rem; }
@@ -654,7 +656,8 @@
  .fit-view:hover { background:#f0f5f9; border-color:#8da6bb; }
  .fit-view:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
  .legend-hint,.inheritance-key {font-size:.8rem;color:#666;line-height:1.4;}
- .inheritance-key { text-align:center; margin:.5rem 0 .25rem; }
+ .inheritance-key { text-align:center; margin:.25rem 0 .15rem; }
+ .inheritance-key[style*="hidden"] { display:none; }
  .interaction-tag { display:inline-flex;align-items:center;justify-content:center;min-height:36px; font-family:inherit; font-weight:500; border:1px solid transparent; cursor:pointer; padding:.35rem .85rem; border-radius:6px; font-size:.8rem; line-height:1.25; text-transform:none; letter-spacing:normal; }
  .interaction-tag:hover:not(:disabled) {border-color:currentColor;}
  .interaction-tag:disabled { opacity:.35; cursor:default; }
@@ -665,6 +668,12 @@
  .interaction-tag.grant { background:#e5effb; color:#1565c0; }
  .network-content { display:grid; grid-template-columns:minmax(0,1fr); gap:1rem; }
  .network-content.has-selection { grid-template-columns:minmax(0,1fr) minmax(320px,35%); }
+ .network-branding { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin-top:.75rem; padding-top:.6rem; border-top:1px solid #e3e6e8; }
+ .tow-watermark { width:140px; height:44px; object-fit:cover; object-position:center; opacity:.8; flex-shrink:0; user-select:none; }
+ .network-source { display:flex; flex-direction:column; align-items:flex-end; gap:.2rem; text-align:right; }
+ .network-source a { font-size:.65rem; color:#666; text-decoration:none; overflow-wrap:anywhere; }
+ .network-source a:hover { text-decoration:underline; }
+ .as-of-date { white-space:nowrap; text-align:right; font-size:.7rem; color:#666; }
  .scroll { position:relative; overflow:hidden; height:65dvh; min-height:160px; touch-action:none; cursor:grab; }
  dialog.expanded .scroll { height:calc(100dvh - 210px); }
  .scaled-area,.map { position:relative; }
@@ -734,4 +743,20 @@
   path.hit-area { stroke-width:20; }
  }
 
+ /* Let the graph use the space left by the title, legend and branding. */
+ dialog,dialog.expanded { overflow:hidden; scrollbar-gutter:auto; }
+ dialog[open] { display:flex; flex-direction:column; }
+ header,.routing-status { flex-shrink:0; }
+ .network-content { flex:1; min-height:0; grid-template-rows:minmax(0,1fr); }
+ .graph-column { display:flex; flex-direction:column; min-height:0; }
+ .scroll,dialog.expanded .scroll,.network-content.has-selection .scroll { flex:1; height:auto; min-height:0; }
+ .legend,.inheritance-key,.ownership-legend,.network-branding { flex-shrink:0; }
+ .selected-record,dialog.expanded .selected-record { min-height:0; max-height:100%; overflow:auto; scrollbar-width:none; }
+ .selected-record::-webkit-scrollbar { display:none; }
+ @media (max-width:700px) {
+  .network-content.has-selection { grid-template-rows:minmax(0,1fr) minmax(0,.65fr); }
+  .legend { margin-top:.5rem; }
+  .network-branding { margin-top:.35rem; }
+  .tow-watermark { width:120px; height:38px; }
+ }
 </style>
