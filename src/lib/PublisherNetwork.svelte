@@ -657,7 +657,7 @@
  .fit-view:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
  .legend-hint,.inheritance-key {font-size:.8rem;color:#666;line-height:1.4;}
  .inheritance-key { text-align:center; margin:.25rem 0 .15rem; }
- .inheritance-key[style*="hidden"] { display:none; }
+ /* Reserve the note’s space so hover does not resize and refit the graph. */
  .interaction-tag { display:inline-flex;align-items:center;justify-content:center;min-height:36px; font-family:inherit; font-weight:500; border:1px solid transparent; cursor:pointer; padding:.35rem .85rem; border-radius:6px; font-size:.8rem; line-height:1.25; text-transform:none; letter-spacing:normal; }
  .interaction-tag:hover:not(:disabled) {border-color:currentColor;}
  .interaction-tag:disabled { opacity:.35; cursor:default; }
