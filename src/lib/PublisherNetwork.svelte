@@ -483,6 +483,7 @@
    fitFrame = requestAnimationFrame(async () => {
     // Let measured dimensions update layout before fitting, and commit the
     // camera transform before revealing the initially hidden graph.
+    await document.fonts.ready;
     await tick();
     if (disposed || revision !== fitRevision) return;
     resetCamera();
@@ -523,8 +524,9 @@
 
 
 
- {#if routing}<p class="routing-status" role="status">Drawing connections…</p>{/if}
- {#if routingError}<p class="routing-status" role="alert">Connections could not be drawn. Close and reopen the network to retry.</p>{/if}
+ {#if !showVenn}
+  <p class="routing-status" class:routing-error={routingError} style:visibility={routing || routingError ? 'visible' : 'hidden'} role="status">{routingError ? 'Connections could not be drawn. Close and reopen the network to retry.' : 'Drawing connections…'}</p>
+ {/if}
  <div class="network-content" class:has-selection={panelRecords.length > 0}>
  <div class="graph-column">
  <!-- This application surface deliberately handles pan/zoom and implements its documented keyboard controls. -->
