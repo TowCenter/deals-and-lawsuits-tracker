@@ -192,8 +192,10 @@
   const width = Math.min(200, Math.max(120,viewportWidth - 24));
   const nodeTop = cameraY + node.y * scale;
   const above = nodeTop > 130;
-  return {name:node.name, coalitions:coalitionMembers.get(node.key), width, above,
-   left:Math.max(12,Math.min(viewportWidth-width-12,cameraX+(node.x+node.r)*scale-width/2)),
+  const centerX = cameraX + (node.x + node.r) * scale;
+  const left = Math.max(12,Math.min(viewportWidth-width-12,centerX-width/2));
+  return {name:node.name, coalitions:coalitionMembers.get(node.key), width, above, left,
+   arrowX:Math.max(10,Math.min(width-10,centerX-left)),
    top:above ? nodeTop-10 : Math.max(12,Math.min(viewportHeight-120,cameraY+(node.y+node.height)*scale+10))};
  });
  const platformNodes = $derived(new Map(graphNodes.filter(node => node.key.startsWith('platform:')).map(node => [node.name,node])));
@@ -600,7 +602,7 @@
  {/each}
  </div></div>
  {#if coalitionTooltip}
-  <div id={`${componentId}-coalition-tooltip`} class="coalition-tooltip" role="tooltip" style:left="{coalitionTooltip.left}px" style:top="{coalitionTooltip.top}px" style:width="{coalitionTooltip.width}px" style:transform={coalitionTooltip.above ? 'translateY(-100%)' : undefined}>
+  <div id={`${componentId}-coalition-tooltip`} class="coalition-tooltip" class:above={coalitionTooltip.above} style:--arrow-x="{coalitionTooltip.arrowX}px" role="tooltip" style:left="{coalitionTooltip.left}px" style:top="{coalitionTooltip.top}px" style:width="{coalitionTooltip.width}px" style:transform={coalitionTooltip.above ? 'translateY(-100%)' : undefined}>
    <p class="coalition-tooltip-membership"><span>Part of&nbsp;</span>{coalitionTooltip.coalitions.join('; ')}</p>
   </div>
  {/if}
@@ -649,8 +651,10 @@
 </dialog>
 
 <style>
- .coalition-tooltip { position:absolute; z-index:90; box-sizing:border-box; padding:.5rem .6rem; border:0; border-radius:0; background:#fff; color:#333; box-shadow:0 4px 16px #24202d20; pointer-events:none; font-family:inherit; font-size:.65rem; line-height:1.35; max-height:calc(100% - 24px); overflow:hidden; }
+ .coalition-tooltip { position:absolute; z-index:90; box-sizing:border-box; padding:.5rem .6rem; border:1px solid #8054b3; border-radius:0; background:#fff; color:#333; box-shadow:0 4px 16px #24202d20; pointer-events:none; font-family:inherit; font-size:.65rem; line-height:1.35; max-height:calc(100% - 24px); overflow:visible; }
 
+ .coalition-tooltip::after { content:''; position:absolute; left:var(--arrow-x); top:-5px; width:8px; height:8px; background:white; border-left:1px solid #8054b3; border-top:1px solid #8054b3; transform:translateX(-50%) rotate(45deg); }
+ .coalition-tooltip.above::after { top:auto; bottom:-5px; transform:translateX(-50%) rotate(225deg); }
  .coalition-tooltip-membership { margin:0; font:inherit; color:#694395; overflow-wrap:anywhere; }
  .coalition-tooltip-membership span { color:inherit; }
 
