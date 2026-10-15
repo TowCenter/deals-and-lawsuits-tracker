@@ -1506,7 +1506,7 @@
 						<div class="field-value">
                             {#if interactionType === 'collective'}
                              {@const members = entry.collective_publishers?.length ? entry.collective_publishers : allPublishers.filter(name => name !== entry.collective_name)}
-                             {#each members as name}<div class="field-item">{@html highlightEntity(row, name)}{@render countryFlags(entry, name)}</div>{/each}
+                             {#each members as name}<div class="field-item">{@html highlightEntity(row, name)}{@render entityNetworkIcon(row.id, name, 'publisher')}{@render countryFlags(entry, name)}</div>{/each}
                              {#if !members.length}<span class="collective-empty">Publishers not listed.</span>{/if}
                             {:else if interactionType === 'grant'}
                              <GrantPublications presentation={grantPresentations(entry)}>
