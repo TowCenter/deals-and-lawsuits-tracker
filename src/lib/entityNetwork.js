@@ -36,15 +36,18 @@ export function createEntityNetworkIndex(data) {
  return index;
 }
 
-/** Collapse case updates while preserving all named participants and platforms. */
+/** Collapse case and grant updates while preserving all participants and platforms. */
 export function networkEntries(records) {
  const groups = new Map();
  for (const record of records) {
-  const key = record.lawsuit_id ? `case:${record.lawsuit_id}` : `entry:${record.id}`;
+  const isGrant = (record.interaction || []).some(type => /^grants?$/i.test(String(type).trim()));
+  const grantId = record.grant_id || record.grant_ids?.[0];
+  const key = record.lawsuit_id ? `case:${record.lawsuit_id}` : isGrant && grantId ? `grant:${grantId}` : `entry:${record.id}`;
   const previous = groups.get(key);
   const latest = previous && String(previous.date || '') > String(record.date || '') ? previous : record;
   groups.set(key, {
    ...latest,
+   ...(isGrant && grantId ? Object.fromEntries(['affected_publications','grantees','publications_received_grants','named_organizations','interaction'].map(field => [field, [...new Set([...(previous?.[field] || []), ...(record[field] || [])])]])) : {}),
    organization_publisher_named_in_deal_suit: [...new Set([...(previous?.organization_publisher_named_in_deal_suit || []), ...(record.organization_publisher_named_in_deal_suit || [])])],
    companies: [...new Set([...(previous?.companies || []), ...(record.platform || []), ...(record.defendant || [])])]
   });

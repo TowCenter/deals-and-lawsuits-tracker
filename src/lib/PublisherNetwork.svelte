@@ -1,4 +1,6 @@
 <script>
+ import { coalitionMembership } from './coalitionMembership.js';
+ const coalitionMembers = $derived(coalitionMembership(data));
  import towLogo from '../../demo-app/src/lib/assets/tow-center-horizontal.png';
  import { createEntityNetworkIndex, entityKey, networkEntries, platformConnectionNames } from './entityNetwork.js';
  import { layoutVennNetwork } from './vennNetwork.js';
@@ -572,7 +574,7 @@
  </svg>
 
  {#each displayNodes as node (node.key)}
-  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" class:relationship-outline={showVenn && relationshipOutlines.has(node.key)} style:--relationship-outline={showVenn ? relationshipOutlines.get(node.key) : undefined} style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-label={node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} ondblclick={() => { if (suppressGraphClick) return; navigateTo('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
+  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" class:coalition-member={coalitionMembers.has(node.key)} style:--coalition-stroke="{Math.min(3, 1.5 * Math.sqrt(Math.max(1, cameraZoom))) / (mapScale * cameraZoom)}px" style:--coalition-inset="{1 / (mapScale * cameraZoom)}px" class:relationship-outline={showVenn && relationshipOutlines.has(node.key)} style:--relationship-outline={showVenn ? relationshipOutlines.get(node.key) : undefined} style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" title={coalitionMembers.has(node.key) ? `${node.name} · Member of ${coalitionMembers.get(node.key).join('; ')}` : node.name} aria-label={coalitionMembers.has(node.key) ? `${node.name}, coalition member: ${coalitionMembers.get(node.key).join('; ')}` : node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} ondblclick={() => { if (suppressGraphClick) return; navigateTo('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
   <div class="floating-node-label" class:venn-node-label={showVenn} class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}{#if canFocusSelection && selectedEntity.type === 'publisher' && label.node.key === selectedPublisher}{@render exploreSelection(selectedEntity.name)}{/if}</div>
@@ -614,6 +616,9 @@
    <span>Nested circles represent subsidiaries.</span>
   </div>
  {/if}
+ {#if displayNodes.some(node => coalitionMembers.has(node.key))}
+  <div class="coalition-key"><span aria-hidden="true"></span>Purple outline = coalition member · hover over a publisher for names</div>
+ {/if}
  <div class="network-branding"><img class="tow-watermark" src={towLogo} alt="Tow Center for Digital Journalism" draggable="false" /><div class="network-source"><span class="as-of-date">Data as of 10/13/26</span><a href="https://tow.cjr.org/ai-deals-lawsuits/" target="_blank" rel="noopener noreferrer">tow.cjr.org/ai-deals-lawsuits</a></div></div>
  </div>
 
@@ -627,6 +632,10 @@
 </dialog>
 
 <style>
+
+ .coalition-key { display:flex; flex-shrink:0; align-items:center; justify-content:center; gap:.4rem; margin:.3rem 0; color:#666; font-size:.7rem; }
+ .coalition-key span { width:12px; height:12px; box-sizing:border-box; border:3px solid #7026b9; border-radius:50%; }
+
  dialog { width:calc(100vw - 32px); max-width:1600px; height:95dvh; max-height:95dvh; margin:auto; overflow-y:auto; scrollbar-gutter:stable; padding:1.5rem; border:1px solid #ddd; background:#fff; color:#111; box-sizing:border-box; font:inherit; box-shadow:0 8px 24px #0002; }
  dialog.expanded { width:calc(100vw - 16px); height:calc(100dvh - 16px); max-width:none; max-height:none; margin:auto; }
  dialog::backdrop { background:#14182048; }
@@ -761,4 +770,6 @@
   .network-branding { margin-top:.35rem; }
   .tow-watermark { width:120px; height:38px; }
  }
+ .ownership-node.coalition-member { border:var(--coalition-stroke,1.5px) solid #7026b9; box-shadow:inset 0 0 0 var(--coalition-inset,1px) #fff; opacity:1; }
+ .ownership-node.coalition-member.relationship-outline::after { display:none; }
 </style>

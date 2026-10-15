@@ -8,7 +8,7 @@
    <div class="recipients">
     {#each group.items as item}
      <div class="recipient" style:margin-left={`${(item.depth - 1) * 16}px`}>
-      {#if item.isGrantee}<span class="role-label">Grantee: </span>{/if}{@render label(item.name)}{@render flags(item.name)}
+      {#if item.isGrantee}<span class="role-label">Grantee:&nbsp;</span>{/if}{@render label(item.name)}{@render flags(item.name)}
      </div>
     {/each}
    </div>
@@ -16,7 +16,7 @@
  </div>
 {/each}
 {#each presentation.unassigned as item}
- <div class="field-item">{#if item.isGrantee}<span class="role-label">Grantee: </span>{/if}{@render label(item.name)}{@render flags(item.name)}</div>
+ <div class="field-item">{#if item.isGrantee}<span class="role-label">Grantee:&nbsp;</span>{/if}{@render label(item.name)}{@render flags(item.name)}</div>
 {/each}
 <style>
  .publisher-item {margin-bottom:.5rem;}

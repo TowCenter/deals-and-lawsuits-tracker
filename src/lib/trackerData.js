@@ -61,7 +61,9 @@ export function normalizeData(rawDataArray) {
             const grantees = normalizeArray(row?.Grantees);
             const publicationsReceivedGrants = normalizeArray(row?.['Publications Received Grants']);
             const affectedPublications = normalizeArray(row?.['Affected Publications']);
-            const namedOrganizations = normalizeArray(row?.['News Org(s)']);
+            const isCollective = interaction.some(value => /^collectives?$/i.test(String(value).trim()));
+            const collectiveList = value => typeof value === 'string' ? value.split(',').map(name => name.trim()).filter(Boolean) : normalizeArray(value);
+            const namedOrganizations = isCollective ? collectiveList(row?.['News Org(s)']) : normalizeArray(row?.['News Org(s)']);
             // Grant beneficiaries are explicit participants, not ownership descendants.
             const publishers = interaction.some(value => String(value).toLowerCase() === 'grant')
                 ? [...new Set([...namedOrganizations, ...grantees, ...publicationsReceivedGrants, ...affectedPublications])]
@@ -69,9 +71,13 @@ export function normalizeData(rawDataArray) {
 
             return {
                 id: row?.id != null ? row.id : index, // Use row.id if available, otherwise use index
-                date: row?.Date || null,
+                date: isCollective && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(row?.Date || '') ? (() => { const [m,d,y] = row.Date.split('/'); return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`; })() : row?.Date || null,
                 interaction,
                 platform: normalizeArray(row?.['AI Company']),
+                collective_name: normalizeArray(row?.Coalition ?? row?.['Collective Name'] ?? row?.Collective ?? row?.['Collective(s)'])[0] || namedOrganizations[0] || 'Collective',
+                collective_ids: normalizeArray(row?.Deal_ID ?? row?.Collective_ID ?? row?.Coalition_ID ?? row?.['Collective ID'] ?? row?.['Coalition ID']).map(value => String(value).trim()),
+                collective_status: isValidValue(row?.['Collective Status'] ?? row?.Status) ? String(row?.['Collective Status'] ?? row?.Status) : null,
+                collective_publishers: isCollective ? namedOrganizations : [],
                 publishers,
                 type: normalizeArray(row?.Type),
                 reported_details: row?.['Reported Details'] || '',
@@ -88,12 +94,14 @@ export function normalizeData(rawDataArray) {
                 parent_child_matches: Array.isArray(row?.['parent_child_matches']) ? row['parent_child_matches'] : [],
                 docket: row?.Docket || null,
                 additional_coverage: row?.['Additional Coverage'] || null,
-                sources: normalizeArray(row?.Sources),
+                sources: [...new Set([...normalizeArray(row?.Sources), ...(isCollective ? [...normalizeArray(row?.['Primary Sources']), ...normalizeArray(row?.['Secondary Sources'])] : [])])],
                 linked_entry_ids: linkedEntryIds,
                 ...mdlForRow(row),
                 // Lawsuit-specific fields
                 // Rows sharing a lawsuit_id are the SAME case at different points in time,
                 // not related cases. CardView merges them into one card with a status track.
+                grant_ids: normalizeArray(row?.Grant_ID ?? row?.grant_id ?? row?.['Grant ID']).map(value => String(value).trim()),
+                grant_id: normalizeArray(row?.Grant_ID ?? row?.grant_id ?? row?.['Grant ID']).map(value => String(value).trim())[0] || null,
                 lawsuit_ids: normalizeArray(row?.Lawsuit_ID),
                 lawsuit_id: isValidValue(row?.Lawsuit_ID) ? String(row.Lawsuit_ID) : null,
                 status: isValidValue(row?.Status) ? String(row.Status) : null,

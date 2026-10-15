@@ -1,5 +1,19 @@
 <script>
 	import { base } from '$app/paths';
+ import { createGrantTimelineIndex } from './grantTimeline.js';
+ const grantTimeline = $derived(createGrantTimelineIndex(data));
+ const collectiveTimeline = $derived.by(() => {
+  const groups = new Map();
+  for (const record of data) {
+   if (getInteractionType(record.interaction) !== 'collective') continue;
+   for (const id of new Set(record.collective_ids || [])) {
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(record);
+   }
+  }
+  return record => [...new Set((record.collective_ids || []).flatMap(id => groups.get(id) || []))]
+   .sort((a,b) => String(a.date || '').localeCompare(String(b.date || '')));
+ });
  import CardShare from './CardShare.svelte';
  import CoveragePreview from './CoveragePreview.svelte';
  import { onMount, tick } from 'svelte';
@@ -113,13 +127,6 @@
   const placeAbove = above > below;
   const maxHeight = Math.max(80, Math.min(320, placeAbove ? above : below));
   infoPosition = {left:Math.max(16, Math.min(bounds.right - width, window.innerWidth - width - 16)), top:placeAbove ? bounds.top - 4 : bounds.bottom + 4, transform:placeAbove ? 'translateY(-100%)' : 'none', maxHeight};
- }
- let expandedPublisherLists = $state(new Set());
- function togglePublisherList(event, id) {
-  event.stopPropagation();
-  const next = new Set(expandedPublisherLists);
-  if (next.has(id)) next.delete(id); else next.add(id);
-  expandedPublisherLists = next;
  }
 
 	$effect(() => { if (focusedRecordId != null) expandedCards = new Set([focusedRecordId]); });
@@ -866,6 +873,7 @@
 				// Map common variations to standard types
 				if (normalized === 'lawsuit' || normalized === 'lawsuits') return INTERACTION_TYPES.LAWSUIT;
 				if (normalized === 'grant' || normalized === 'grants') return INTERACTION_TYPES.GRANT;
+				if (normalized === 'collective' || normalized === 'collectives') return 'collective';
 				if (normalized === 'deal' || normalized === 'deals') return INTERACTION_TYPES.DEAL;
 				return null;
 			})
@@ -879,6 +887,7 @@
 	 */
 	function getInteractionType(interaction) {
 		const types = getInteractionTypes(interaction);
+        if (types.includes('collective')) return 'collective';
 		if (types.includes(INTERACTION_TYPES.LAWSUIT)) return INTERACTION_TYPES.LAWSUIT;
 		if (types.includes(INTERACTION_TYPES.GRANT)) return INTERACTION_TYPES.GRANT;
 		if (types.includes(INTERACTION_TYPES.DEAL)) return INTERACTION_TYPES.DEAL;
@@ -1358,6 +1367,7 @@
 						{@const parentChildMatches = Array.isArray(entry.parent_child_matches) ? entry.parent_child_matches : []}
 						{@const hierarchyTree = buildHierarchyTree(parentChildMatches, allPublishers)}
 						{@const borderColors = interactionTypes.map(t => {
+							if (t === 'collective') return '#9575cd';
 							if (t === 'lawsuit') return '#e57373';
 							if (t === 'grant') return '#64b5f6';
 							return '#81c784';
@@ -1374,7 +1384,7 @@
 							: ''}
 						<div
 							class="card-wrapper"
-                            class:with-share={showSharing && Boolean(row.reported_details)}
+                            class:with-share={showSharing && (Boolean(row.reported_details) || interactionType === 'collective')}
 							class:is-source={isSourceCard(row)}
 							class:is-related={viewingRelatedTo != null && !isSourceCard(row)}
 						>
@@ -1400,7 +1410,9 @@
 									{/if}
 									{#if !isCardExpanded(row.id)}
 									<div class="header-content">
-										{#if interactionType === 'lawsuit'}
+										{#if interactionType === 'collective'}
+ <div class="header-item collective-title">{@html highlightText(entry.collective_name || allPublishers[0] || 'Collective')}</div>
+ {:else if interactionType === 'lawsuit'}
 											<div class="header-left">
 												{#if Array.isArray(row.defendant) && row.defendant.length > 0}
 													{#each row.defendant as defendant}
@@ -1430,11 +1442,10 @@
 											<div class="header-separator"></div>
 											<div class="header-right-content">
 												{#if Array.isArray(allPublishers) && allPublishers.length > 0}
-													{#each (allPublishers.length <= 15 || expandedPublisherLists.has(row.id) ? allPublishers : allPublishers.slice(0, 3)) as pub}
+													{#each allPublishers as pub}
 														<div class="header-item">{@html highlightEntity(row, pub)}
 {@render entityNetworkIcon(row.id, pub, 'publisher')}</div>
 													{/each}
-{#if allPublishers.length > 15}<button type="button" class="publisher-more" aria-expanded={expandedPublisherLists.has(row.id)} onclick={event => togglePublisherList(event, row.id)}>{expandedPublisherLists.has(row.id) ? 'See less' : `+ See ${allPublishers.length - 3} more`}</button>{/if}
 												{/if}
 											</div>
 										{/if}
@@ -1449,7 +1460,7 @@
 										<div class="interaction-tags">
 											{#each interactionTypes as interaction}
 												<span class="interaction-tag {interaction}">
-													{interaction === 'lawsuit' ? 'Lawsuit' : interaction === 'grant' ? 'Grant' : 'Deal'}
+													{interaction === 'collective' ? 'Collective' : interaction === 'lawsuit' ? 'Lawsuit' : interaction === 'grant' ? 'Grant' : 'Deal'}
 												</span>
 											{/each}
 										</div>
@@ -1464,7 +1475,8 @@
                                     <div class="card-content" onclick={(e) => handleCardContentClick(e, row.id)}>
 									<!-- Column 1 -->
 									<div class="card-column column-1">
-					<div class="card-field">
+					{#if interactionType !== 'collective'}
+<div class="card-field">
 						<div class="field-label">{interactionType === 'lawsuit' ? 'Defendant(s)' : 'AI Company'}</div>
 						<div class="field-value">
 							{#if interactionType === 'lawsuit' && Array.isArray(entry.defendant) && entry.defendant.length > 0}
@@ -1481,13 +1493,21 @@
 								</div>
 				</div>
 
+                    {/if}
+                    {#if interactionType === 'collective'}
+                     <div class="card-field"><div class="field-label">Collective</div><div class="field-value">{@html highlightText(entry.collective_name || allPublishers[0] || 'Collective')}</div></div>
+                    {/if}
 					<div class="card-field news-org-field">
 						<div class="news-org-header">
-							<div class="field-label">{interactionType === 'lawsuit' ? 'News Org(s)' : 'Publication(s)'}</div>
+							<div class="field-label">{interactionType === 'collective' ? 'Publishers' : interactionType === 'lawsuit' ? 'News Org(s)' : 'Publication(s)'}</div>
 							<div class="affected-note">{interactionType === 'lawsuit' ? '(Organization(s) named in suit)' : '(Organization(s) named in announcement(s) or confirmed by platform)'}</div>
 						</div>
 						<div class="field-value">
-                            {#if interactionType === 'grant'}
+                            {#if interactionType === 'collective'}
+                             {@const members = entry.collective_publishers?.length ? entry.collective_publishers : allPublishers.filter(name => name !== entry.collective_name)}
+                             {#each members as name}<div class="field-item">{@html highlightEntity(row, name)}{@render countryFlags(entry, name)}</div>{/each}
+                             {#if !members.length}<span class="collective-empty">Publishers not listed.</span>{/if}
+                            {:else if interactionType === 'grant'}
                              <GrantPublications presentation={grantPresentations(entry)}>
                               {#snippet label(name)}{@html highlightEntity(row, name)}{/snippet}
                               {#snippet flags(name)}{@render countryFlags(entry, name)}{/snippet}
@@ -1495,7 +1515,7 @@
                              </GrantPublications>
                             {:else}
 
-							{#each (allPublishers.length <= 15 || expandedPublisherLists.has(row.id) ? allPublishers : allPublishers.slice(0, 3)) as org}
+							{#each allPublishers as org}
 								{@const orgTree = hierarchyTree[org] || {}}
 								{@const hasMatches = Object.keys(orgTree).length > 0 || (orgTree.publications && orgTree.publications.length > 0)}
 								<div class="publisher-item">
@@ -1517,7 +1537,7 @@
 															{#if normalizedPub !== normalizedParent && normalizedPub !== ''}
 																<div class="affected-title">
 																	{#if interactionType === 'grant' && (entry.publications_received_grants || []).some(name => normalizeName(name) === normalizeName(publication))}
-																		<span class="hierarchy-label">Grantee: </span>
+																		<span class="hierarchy-label">Grantee:&nbsp;</span>
 																	{/if}
 																	{@html highlightEntity(row, publication)}
 
@@ -1528,7 +1548,7 @@
 													{:else}
 														<div class="hierarchy-intermediate">
 															<span class="hierarchy-intermediate-name">
-                                                        {#if interactionType === 'grant' && (entry.publications_received_grants || []).some(name => normalizeName(name) === normalizeName(key))}<span class="hierarchy-label">Grantee: </span>{/if}
+                                                        {#if interactionType === 'grant' && (entry.publications_received_grants || []).some(name => normalizeName(name) === normalizeName(key))}<span class="hierarchy-label">Grantee:&nbsp;</span>{/if}
 
 																{@html highlightEntity(row, key)}
 
@@ -1546,7 +1566,6 @@
 					{/if}
 				</div>
 							{/each}
-{#if allPublishers.length > 15}<button type="button" class="publisher-more expanded-publisher-more" aria-expanded={expandedPublisherLists.has(row.id)} onclick={event => togglePublisherList(event, row.id)}>{expandedPublisherLists.has(row.id) ? 'See less' : `+ See ${allPublishers.length - 3} more publishers`}</button>{/if}
                             {/if}
 						</div>
 					</div>
@@ -1567,7 +1586,63 @@
 										</div>
 									</div>
 
-{#if interactionType !== 'lawsuit'}
+{#if interactionType === 'collective'}
+ {@const history = collectiveTimeline(entry)}
+ <div class="card-field collective-status">
+  <div class="field-label">Collective updates</div>
+  {#if history.length}
+   <ol class="status-chain" aria-label="Collective status history">
+    {#each history as update (update.id)}
+     <li class="status-chain-step" class:current={update.id === entry.id}>
+      <span class="status-chain-dot"></span>
+      {#if update.id === entry.id}
+       <span class="status-chain-label">{@html highlightText(update.collective_status || 'Membership update')}</span>
+      {:else}
+       <a class="status-chain-label status-chain-jump" href={`${base}/#card-${encodeURIComponent(update.id)}`} onclick={event => {
+        event.stopPropagation();
+        if (document.getElementById(`card-${update.id}`)) { event.preventDefault(); goToCaseEntry(update.id); }
+       }}>{update.collective_status || 'Membership update'}</a>
+      {/if}
+      <span class="status-chain-date">{formatDate(update.date)}</span>
+     </li>
+    {/each}
+   </ol>
+  {:else}
+   <span class="field-value">{@html highlightText(entry.collective_status || 'Membership update')}</span>
+  {/if}
+ </div>
+{/if}
+
+{#if interactionType === 'grant'}
+ {@const updates = grantTimeline(entry)}
+ {#if updates.length > 1}
+ <div class="card-field legal-details grant-timeline">
+  <h3>Grant updates</h3>
+  <ol class="status-chain" aria-label="Grant updates, oldest first">
+   {#each updates as update (update.id)}
+    <li class="status-chain-step grant-step" class:current={update.id === entry.id}>
+     <span class="status-chain-dot"></span>
+     <div class="grant-step-content">
+      {#if update.id === entry.id}
+       <span class="grant-step-date status-chain-label">{formatDate(update.date)}</span>
+      {:else}
+       <a class="grant-step-date status-chain-label status-chain-jump" href={`${base}/#card-${encodeURIComponent(update.id)}`} aria-label={`View grant update from ${formatDate(update.date)}`} onclick={event => {
+        event.stopPropagation();
+        if (document.getElementById(`card-${update.id}`)) {
+         event.preventDefault();
+         goToCaseEntry(update.id);
+        }
+       }}>{formatDate(update.date)}</a>
+      {/if}
+     </div>
+    </li>
+   {/each}
+  </ol>
+ </div>
+ {/if}
+{/if}
+
+{#if interactionType !== 'lawsuit' && interactionType !== 'collective'}
 					<div class="card-field">
 						<div class="field-label">{interactionType === 'lawsuit' ? 'Complaint(s)' : 'Type'}</div>
 						<div class="field-value type-tags-wrapper">
@@ -1752,7 +1827,7 @@
 
 							{#if allSources.length > 0 && (interactionType !== 'lawsuit' || interactionTypes.includes('deal') || interactionTypes.includes('grant'))}
 								<div class="citations-section">
-									<div class="citations-label">Read More:</div>
+									<div class="citations-label">{interactionType === 'collective' ? 'Sources' : 'Read More:'}</div>
 									<div class="citations coverage-links">
 										{#each allSources as source, index}
 											{@const archiveInfo = getArchiveInfo(source)}
@@ -1776,7 +1851,7 @@
 					</div>
 				{/if}
 							</div>
-                            {#if showSharing && row.reported_details}<CardShare {row} />{/if}
+                            {#if showSharing && (row.reported_details || interactionType === 'collective')}<CardShare {row} />{/if}
 						</div>
 					{/each}
 					</div>
@@ -1791,6 +1866,19 @@
 </div>
 
 <style>
+ .collective-status { margin-top:1rem; }
+ .collective-status .field-label { margin-bottom:.6rem; }
+ .collective-status .status-chain-step.current .status-chain-dot { background:#9575cd; }
+ .card.collective { border-left:3px solid #9575cd; }
+ .collective-title { font-weight:600; }
+ .interaction-tag.collective { background:#f0eaf8; color:#694395; }
+ .collective-empty { color:#777; font-size:.8rem; }
+
+ .grant-timeline { background:#fafbfc; }
+ .grant-step { grid-template-columns:7px minmax(0,1fr); }
+ .grant-step-content { min-width:0; }
+ .grant-step-date { font-variant-numeric:tabular-nums; }
+
  .expanded-status-tag {display:inline-flex; align-items:center; gap:.45rem; width:fit-content; padding:.25rem .55rem; background:#f5f5f5; border-radius:5px; font-size:.8rem; line-height:1.5; font-weight:500; text-decoration:none; color:inherit;}
  .expanded-status-tag::before {content:''; flex:0 0 8px; width:8px; height:8px; border-radius:50%; background:#666; box-shadow:0 0 0 2px #ddd;}
  .expanded-status-tag.in-progress::before {background:#ffb300;}
@@ -1802,13 +1890,7 @@
  .status-chain-label.expanded-status-tag::before {display:none;}
  .legal-details .status-chain-step .status-chain-dot {background:var(--status-color,#666);}
  .legal-details button.expanded-status-tag {border:0; cursor:pointer;}
- .publisher-more {display:inline-flex; align-items:center; width:fit-content; margin-top:.3rem; padding:.2rem 0; border:0; border-radius:0; background:transparent; font-family:inherit; font-size:.8rem; font-weight:600; line-height:1.5; letter-spacing:normal; color:#254c6f; cursor:pointer; text-decoration:underline; text-underline-offset:4px;}
- .news-org-field .field-value > .expanded-publisher-more {margin-top:-.2rem; padding:0; align-self:flex-start;}
- .news-org-field .publisher-item:has(+ .expanded-publisher-more) {margin-bottom:0;}
- .news-org-field .publisher-item:has(+ .expanded-publisher-more) > .field-item {margin-bottom:0;}
- .publisher-more:hover {color:#254c6f; text-decoration:underline; text-underline-offset:3px;}
 
- .publisher-more:focus-visible {outline:2px solid #254c6f; outline-offset:3px;}
 
  .case-documents {padding:1rem; font-family:inherit; font-size:.8rem; font-weight:400; line-height:1.5; color:#333;}
  .legal-details,.case-documents {background:#fafbfc; border-radius:6px; box-sizing:border-box;}
@@ -3180,4 +3262,8 @@
 			right: 10px;
 		}
 	}
+ .card.collective.collapsed .header-content { margin-left:0 !important; padding-left:0; margin-bottom:0; width:auto; }
+ .card.collective.collapsed .header-right { margin:0; padding:0; border:0; width:auto; order:initial; }
+ .card.collective.collapsed .card-header { flex-direction:row; align-items:center; flex-wrap:nowrap; gap:.75rem; }
+ .card.collective.collapsed .header-date { position:static; flex:0 0 auto; margin:0; padding:0; order:initial; }
 </style>

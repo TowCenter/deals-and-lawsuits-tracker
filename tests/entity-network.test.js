@@ -53,3 +53,21 @@ test('mixed grant/deal entries use parent endpoints even in publisher views', ()
  const view = index.query({type:'publisher',name:'Axios'});
  assert.deepEqual(networkEntries(view.records).flatMap(entry => platformConnectionNames(entry, index.ownership)), ['Axios']);
 });
+
+test('grant network entries group by grant ID, retain recipients and select the latest card', () => {
+ const rows=[
+  {id:1, date:'2025-01-01', interaction:['Grant'], grant_id:'program-a', organization_publisher_named_in_deal_suit:['Parent'], publications_received_grants:['Early recipient'], affected_publications:['Early recipient'], platform:['OpenAI']},
+  {id:2, date:'2026-01-01', interaction:['Grant'], grant_id:'program-a', organization_publisher_named_in_deal_suit:['Later publisher'], publications_received_grants:['Later recipient'], platform:['Microsoft']},
+  {id:3, interaction:['Grant'], grant_id:'program-b'},
+  {id:4, interaction:['Grant']},
+  {id:5, interaction:['Grant']}
+ ];
+ const entries=networkEntries(rows);
+ assert.equal(entries.length,4);
+ const merged=entries.find(row=>row.grant_id==='program-a');
+ assert.equal(merged.id,2);
+ assert.deepEqual(merged.publications_received_grants,['Early recipient','Later recipient']);
+ assert.deepEqual(merged.companies,['OpenAI','Microsoft']);
+ assert.deepEqual(merged.organization_publisher_named_in_deal_suit,['Parent','Later publisher']);
+ assert.equal(networkEntries([...rows].reverse()).find(row=>row.grant_id==='program-a').id,2);
+});

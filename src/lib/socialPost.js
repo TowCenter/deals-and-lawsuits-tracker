@@ -22,6 +22,7 @@ export function buildSocialPost(row, url = '', platform = 'bluesky') {
  let title = publisherTitle && platformTitle && clauses.length
   ? `${publisherTitle} ${joinNames(clauses)}`
   : 'AI Deals and Disputes update';
+ if (types.some(type => /^collectives?$/.test(type))) title = `${row.collective_name || 'Publisher collective'} — membership update`;
  if (isStatusUpdate) {
   const parties = publisherTitle && platformTitle ? `${publisherTitle} vs ${platformTitle}` : 'Existing lawsuit';
   const otherActions = types.filter(type => type !== 'lawsuit' && actions[type])
