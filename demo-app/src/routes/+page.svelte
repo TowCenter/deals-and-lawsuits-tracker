@@ -1,4 +1,5 @@
 <script>
+ import {downloadJsonExport} from '../../../src/lib/csvExport.js';
     import { onMount } from 'svelte';
     import { normalizeData } from '../../../src/lib/trackerData.js';
     import Head from "../../../src/lib/Head.svelte";
@@ -102,81 +103,7 @@
     });
 
     function downloadToCSV() {
-        // Define all columns with their display names and data keys
-        const csvColumns = [
-            { name: 'Date', key: 'date' },
-            { name: 'Interaction', key: 'interaction' },
-            { name: 'AI Company', key: 'platform' },
-            { name: 'News Org(s)', key: 'organization_publisher_named_in_deal_suit' },
-            { name: 'Type', key: 'type' },
-            { name: 'Reported Details', key: 'reported_details' },
-            { name: 'Affected Publications', key: 'affected_publications' },
-            { name: 'Read More', key: 'sources' },
-            { name: 'Defendant', key: 'defendant' },
-            { name: 'Plaintiff', key: 'plaintiff' },
-            { name: 'Status', key: 'status' },
-            { name: 'Case Number', key: 'case_number' },
-            { name: 'Case Filing', key: 'case_filing' },
-            { name: 'Docket', key: 'docket' },
-            { name: 'Additional Coverage', key: 'additional_coverage' },
-            ...['number', 'name', 'court', 'docket', 'docket_url', 'initiated_date', 'joined_date', 'source'].map(field => ({ name: `MDL ${field.replaceAll('_', ' ')}`, key: `mdl_${field}` })),
-            { name: 'Location', key: 'location' },
-        ];
-        
-        const header = csvColumns.map(col => col.name).join(',');
-
-        // A merged lawsuit card stands in for every entry of that case, so expand it
-        // back out — the CSV keeps one line per entry.
-        const seenIds = new Set();
-        const exportRows = [];
-        for (const row of filteredData) {
-            const entries = row.lawsuit_id
-                ? partnerships.filter(r => r.lawsuit_id === row.lawsuit_id)
-                : [row];
-            for (const entry of entries) {
-                if (seenIds.has(entry.id)) continue;
-                seenIds.add(entry.id);
-                exportRows.push(entry);
-            }
-        }
-        exportRows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
-
-        const rows = exportRows.map(row => {
-            return csvColumns.map(col => {
-                let value = row[col.key];
-                
-                // Handle arrays by joining with semicolon
-                if (Array.isArray(value)) {
-                    value = value.filter(v => v && String(v).trim()).join('; ');
-                }
-                
-                // Handle parent_child_matches if needed (convert to JSON string)
-                if (col.key === 'parent_child_matches' && Array.isArray(value)) {
-                    value = JSON.stringify(value);
-                }
-                
-                // Convert to string and handle null/undefined
-                const stringValue = value != null ? String(value) : '';
-                
-                // Escape quotes and wrap in quotes
-                const escaped = stringValue.replace(/"/g, '""');
-                return `"${escaped}"`;
-            }).join(',');
-        });
-        
-        const csv = [header, ...rows].join('\n');
-        
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', 'partnerships-data.csv');
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        // Revoke the object URL to prevent memory leaks
-        URL.revokeObjectURL(url);
+        downloadJsonExport(filteredData, partnerships);
     }
 
     // import content from '$locales/en/content.json';

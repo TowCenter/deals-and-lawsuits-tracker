@@ -94,6 +94,8 @@ export function normalizeData(rawDataArray) {
                 parent_child_matches: Array.isArray(row?.['parent_child_matches']) ? row['parent_child_matches'] : [],
                 docket: row?.Docket || null,
                 additional_coverage: row?.['Additional Coverage'] || null,
+                deal_ids: normalizeArray(row?.Deal_ID).map(value => String(value).trim()),
+                primary_sources: normalizeArray(row?.['Primary Sources']),
                 sources: [...new Set([...normalizeArray(row?.Sources), ...(isCollective ? [...normalizeArray(row?.['Primary Sources']), ...normalizeArray(row?.['Secondary Sources'])] : [])])],
                 linked_entry_ids: linkedEntryIds,
                 ...mdlForRow(row),

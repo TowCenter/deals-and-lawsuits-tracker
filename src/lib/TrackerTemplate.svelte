@@ -1,4 +1,5 @@
 <script>
+ import {downloadJsonExport} from './csvExport.js';
 	/**
 	 * Reusable Tracker Template Component
 	 * 
@@ -70,63 +71,8 @@
 
 	// CSV download function
 	function downloadToCSV() {
-		if (!filteredData || filteredData.length === 0) return;
-
-		// Define CSV columns based on available data
-		const csvColumns = [
-			{ name: 'Date', key: 'date' },
-			{ name: 'Interaction', key: 'interaction' },
-			{ name: 'AI Company', key: 'platform' },
-			{ name: 'News Org(s)', key: 'organization_publisher_named_in_deal_suit' },
-			{ name: 'Type', key: 'type' },
-			{ name: 'Reported Details', key: 'reported_details' },
-			{ name: 'Affected Publications', key: 'affected_publications' },
-			{ name: 'Read More', key: 'sources' },
-			{ name: 'Defendant', key: 'defendant' },
-			{ name: 'Plaintiff', key: 'plaintiff' },
-			{ name: 'Status', key: 'status' },
-			{ name: 'Case Number', key: 'case_number' },
-			{ name: 'Case Filing', key: 'case_filing' },
-			{ name: 'Location', key: 'location' },
-		].filter(col => {
-			// Only include columns that exist in the data
-			return filteredData.some(row => row[col.key] !== undefined);
-		});
-		
-		const header = csvColumns.map(col => col.name).join(',');
-		
-		const rows = filteredData.map(row => {
-			return csvColumns.map(col => {
-				let value = row[col.key];
-				
-				// Handle arrays by joining with semicolon
-				if (Array.isArray(value)) {
-					value = value.filter(v => v && String(v).trim()).join('; ');
-				}
-				
-				// Convert to string and handle null/undefined
-				const stringValue = value != null ? String(value) : '';
-				
-				// Escape quotes and wrap in quotes
-				const escaped = stringValue.replace(/"/g, '""');
-				return `"${escaped}"`;
-			}).join(',');
-		});
-		
-		const csv = [header, ...rows].join('\n');
-		
-		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-		const link = document.createElement('a');
-		const url = URL.createObjectURL(blob);
-		link.setAttribute('href', url);
-		link.setAttribute('download', 'tracker-data.csv');
-		link.style.visibility = 'hidden';
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-		// Revoke the object URL to prevent memory leaks
-		URL.revokeObjectURL(url);
-	}
+        downloadJsonExport(filteredData, data);
+    }
 
 	// Get latest date if not provided
 	$: displayDate = latestDate || getLatestDate(data) || '';
