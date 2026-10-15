@@ -603,7 +603,7 @@
  </div></div>
  {#if coalitionTooltip}
   <div id={`${componentId}-coalition-tooltip`} class="coalition-tooltip" class:above={coalitionTooltip.above} style:--arrow-x="{coalitionTooltip.arrowX}px" role="tooltip" style:left="{coalitionTooltip.left}px" style:top="{coalitionTooltip.top}px" style:width="{coalitionTooltip.width}px" style:transform={coalitionTooltip.above ? 'translateY(-100%)' : undefined}>
-   <p class="coalition-tooltip-membership"><span>Part of&nbsp;</span>{coalitionTooltip.coalitions.join('; ')}</p>
+   <p class="coalition-tooltip-membership"><span>Member of&nbsp;</span>{coalitionTooltip.coalitions.join('; ')}</p>
   </div>
  {/if}
  {#if needsFit}
