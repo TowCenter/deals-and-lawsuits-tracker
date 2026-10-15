@@ -184,6 +184,18 @@
   }
   return labels;
  });
+ const coalitionTooltip = $derived.by(() => {
+  if (!hoveredPublisher || !coalitionMembers.has(hoveredPublisher)) return null;
+  const node = displayNodes.find(node => node.key === hoveredPublisher);
+  if (!node) return null;
+  const scale = mapScale * cameraZoom;
+  const width = Math.min(200, Math.max(120,viewportWidth - 24));
+  const nodeTop = cameraY + node.y * scale;
+  const above = nodeTop > 130;
+  return {name:node.name, coalitions:coalitionMembers.get(node.key), width, above,
+   left:Math.max(12,Math.min(viewportWidth-width-12,cameraX+(node.x+node.r)*scale-width/2)),
+   top:above ? nodeTop-10 : Math.max(12,Math.min(viewportHeight-120,cameraY+(node.y+node.height)*scale+10))};
+ });
  const platformNodes = $derived(new Map(graphNodes.filter(node => node.key.startsWith('platform:')).map(node => [node.name,node])));
  const nodeByName = $derived(new Map(graphNodes.filter(node=>!node.key.startsWith('platform:')).map(node => [node.key,node])));
  let hoveredKind = $state(null);
@@ -574,7 +586,7 @@
  </svg>
 
  {#each displayNodes as node (node.key)}
-  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" class:coalition-member={coalitionMembers.has(node.key)} style:--coalition-stroke="{Math.min(3, 1.5 * Math.sqrt(Math.max(1, cameraZoom))) / (mapScale * cameraZoom)}px" style:--coalition-inset="{1 / (mapScale * cameraZoom)}px" class:relationship-outline={showVenn && relationshipOutlines.has(node.key)} style:--relationship-outline={showVenn ? relationshipOutlines.get(node.key) : undefined} style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" title={coalitionMembers.has(node.key) ? `${node.name} · Member of ${coalitionMembers.get(node.key).join('; ')}` : node.name} aria-label={coalitionMembers.has(node.key) ? `${node.name}, coalition member: ${coalitionMembers.get(node.key).join('; ')}` : node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} ondblclick={() => { if (suppressGraphClick) return; navigateTo('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
+  <div role="presentation" onpointerenter={event => { if (event.pointerType !== 'touch') hoveredPublisher = node.key; }} onpointerleave={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} class="ownership-node" class:coalition-member={coalitionMembers.has(node.key)} style:--coalition-stroke="{Math.min(3, 1.5 * Math.sqrt(Math.max(1, cameraZoom))) / (mapScale * cameraZoom)}px" style:--coalition-inset="{1 / (mapScale * cameraZoom)}px" class:relationship-outline={showVenn && relationshipOutlines.has(node.key)} style:--relationship-outline={showVenn ? relationshipOutlines.get(node.key) : undefined} style:--relationship-fill={showVenn ? relationshipFills.get(node.key) : undefined} class:muted-node={highlighting && !highlightedPublishers.has(node.key)} class:selected-node={selectedPublisher === node.key} class:focused-node={focusedEntity?.type === 'publisher' && normalize(focusedEntity.name) === node.key} class:hovered-node={hoveredPublisher === node.key} class:outlined-descendant={highlighting && outlinedDescendants.has(node.key) && !highlightedPublishers.has(node.key)}  style:left="{node.x}px" style:top="{node.y}px" style:width="{node.width}px" style:height="{node.height}px" style:z-index={10 + node.depth * 2} class:parent-circle={node.hasChildren} class:alt={node.depth % 2}><button class="publisher-name" aria-describedby={hoveredPublisher === node.key && coalitionMembers.has(node.key) ? `${componentId}-coalition-tooltip` : undefined} aria-label={coalitionMembers.has(node.key) ? `${node.name}, coalition member: ${coalitionMembers.get(node.key).join('; ')}` : node.name} onclick={() => { if (suppressGraphClick) return; selectEntity('publisher', node.name); }} ondblclick={() => { if (suppressGraphClick) return; navigateTo('publisher', node.name); }} onfocus={() => hoveredPublisher = node.key} onblur={() => { if (hoveredPublisher === node.key) hoveredPublisher = null; }} >{node.name}</button></div>
  {/each}
  {#each visibleLabels as label (label.node.key)}
   <div class="floating-node-label" class:venn-node-label={showVenn} class:muted-label={highlighting && !highlightedPublishers.has(label.node.key)} style:left="{label.x}px" style:top="{label.y}px" style:font-size="{label.font}px" style:width="{label.width}px">{label.node.name}{#if canFocusSelection && selectedEntity.type === 'publisher' && label.node.key === selectedPublisher}{@render exploreSelection(selectedEntity.name)}{/if}</div>
@@ -587,6 +599,11 @@
   {/if}
  {/each}
  </div></div>
+ {#if coalitionTooltip}
+  <div id={`${componentId}-coalition-tooltip`} class="coalition-tooltip" role="tooltip" style:left="{coalitionTooltip.left}px" style:top="{coalitionTooltip.top}px" style:width="{coalitionTooltip.width}px" style:transform={coalitionTooltip.above ? 'translateY(-100%)' : undefined}>
+   <p class="coalition-tooltip-membership"><span>Part of&nbsp;</span>{coalitionTooltip.coalitions.join('; ')}</p>
+  </div>
+ {/if}
  {#if needsFit}
   <button class="fit-view" type="button" onclick={resetCamera} aria-label="Fit to view" title="Fit to view">
    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
@@ -608,16 +625,16 @@
   </div>
  </div>
  {#if !showVenn}
-  <div class="inheritance-key" style:visibility={inheritedAncestorKeys.size ? 'visible' : 'hidden'}>Dashed = inherited from parent</div>
+  <div class="inheritance-key" style:visibility={inheritedAncestorKeys.size ? 'visible' : 'hidden'}><span class="inheritance-swatch" aria-hidden="true"></span><span>Inherited from parent</span></div>
  {/if}
  {#if displayNodes.some(node => node.hasChildren)}
   <div class="ownership-legend">
    <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14"/><circle cx="11" cy="18" r="5"/><circle cx="22" cy="18" r="4"/></svg>
-   <span>Nested circles represent subsidiaries.</span>
+   <span>Nested circles represent subsidiaries</span>
   </div>
  {/if}
  {#if displayNodes.some(node => coalitionMembers.has(node.key))}
-  <div class="coalition-key"><span aria-hidden="true"></span>Purple outline = coalition member · hover over a publisher for names</div>
+  <div class="coalition-key"><span aria-hidden="true"></span>Purple outline = coalition member</div>
  {/if}
  <div class="network-branding"><img class="tow-watermark" src={towLogo} alt="Tow Center for Digital Journalism" draggable="false" /><div class="network-source"><span class="as-of-date">Data as of 10/13/26</span><a href="https://tow.cjr.org/ai-deals-lawsuits/" target="_blank" rel="noopener noreferrer">tow.cjr.org/ai-deals-lawsuits</a></div></div>
  </div>
@@ -632,8 +649,14 @@
 </dialog>
 
 <style>
+ .coalition-tooltip { position:absolute; z-index:90; box-sizing:border-box; padding:.5rem .6rem; border:0; border-radius:0; background:#fff; color:#333; box-shadow:0 4px 16px #24202d20; pointer-events:none; font-family:inherit; font-size:.65rem; line-height:1.35; max-height:calc(100% - 24px); overflow:hidden; }
 
- .coalition-key { display:flex; flex-shrink:0; align-items:center; justify-content:center; gap:.4rem; margin:.3rem 0; color:#666; font-size:.7rem; }
+ .coalition-tooltip-membership { margin:0; font:inherit; color:#694395; overflow-wrap:anywhere; }
+ .coalition-tooltip-membership span { color:inherit; }
+
+
+
+ .coalition-key { display:flex; flex-shrink:0; align-items:center; justify-content:center; gap:.5rem; margin:.3rem 0; color:#666; font-size:.75rem; line-height:1.4; }
  .coalition-key span { width:12px; height:12px; box-sizing:border-box; border:3px solid #7026b9; border-radius:50%; }
 
  dialog { width:calc(100vw - 32px); max-width:1600px; height:95dvh; max-height:95dvh; margin:auto; overflow-y:auto; scrollbar-gutter:stable; padding:1.5rem; border:1px solid #ddd; background:#fff; color:#111; box-sizing:border-box; font:inherit; box-shadow:0 8px 24px #0002; }
@@ -772,4 +795,8 @@
  }
  .ownership-node.coalition-member { border:var(--coalition-stroke,1.5px) solid #7026b9; box-shadow:inset 0 0 0 var(--coalition-inset,1px) #fff; opacity:1; }
  .ownership-node.coalition-member.relationship-outline::after { display:none; }
+ .inheritance-key,.ownership-legend,.coalition-key { display:flex; align-items:center; justify-content:center; gap:.5rem; margin:.3rem 0; min-height:24px; font-family:inherit; font-size:.75rem; font-weight:400; line-height:1.4; color:#666; }
+ .inheritance-swatch { flex:0 0 24px; width:24px; border-top:2px dashed #777; }
+ .ownership-legend svg { flex:0 0 24px; width:24px; height:24px; }
+ .coalition-key > span { flex:0 0 18px; width:18px; height:18px; border-width:1.5px; margin:0 3px; }
 </style>
