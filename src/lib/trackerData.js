@@ -76,7 +76,7 @@ export function normalizeData(rawDataArray) {
                 platform: normalizeArray(row?.['AI Company']),
                 collective_name: normalizeArray(row?.Coalition ?? row?.['Collective Name'] ?? row?.Collective ?? row?.['Collective(s)'])[0] || namedOrganizations[0] || 'Coalition',
                 collective_ids: normalizeArray(row?.Deal_ID ?? row?.Collective_ID ?? row?.Coalition_ID ?? row?.['Collective ID'] ?? row?.['Coalition ID']).map(value => String(value).trim()),
-                collective_status: isValidValue(row?.['Coalition Status'] ?? row?.['Collective Status'] ?? row?.Status) ? String(row?.['Coalition Status'] ?? row?.['Collective Status'] ?? row?.Status).trim().replace(/^update$/i, 'Membership update') : null,
+                collective_status: isValidValue(row?.['Coalition Status'] ?? row?.['Collective Status'] ?? row?.Status) ? String(row?.['Coalition Status'] ?? row?.['Collective Status'] ?? row?.Status).trim() : null,
                 collective_publishers: isCollective ? namedOrganizations : [],
                 publishers,
                 type: normalizeArray(row?.Type),
