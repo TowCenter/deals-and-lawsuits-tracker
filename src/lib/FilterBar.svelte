@@ -146,7 +146,7 @@
 		/>
 
 		<MultiSelect
-			label="News Org"
+			label="News Organization(s)"
 			options={newsOrgOptions}
 			availableValues={availableValues?.publishers}
 			selectedValues={filterPublishers}

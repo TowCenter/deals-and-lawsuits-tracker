@@ -874,7 +874,7 @@
 				// Map common variations to standard types
 				if (normalized === 'lawsuit' || normalized === 'lawsuits') return INTERACTION_TYPES.LAWSUIT;
 				if (normalized === 'grant' || normalized === 'grants') return INTERACTION_TYPES.GRANT;
-				if (normalized === 'collective' || normalized === 'collectives') return 'collective';
+				if (['collective','collectives','coalition','coalitions'].includes(normalized)) return 'collective';
 				if (normalized === 'deal' || normalized === 'deals') return INTERACTION_TYPES.DEAL;
 				return null;
 			})
@@ -1412,7 +1412,7 @@
 									{#if !isCardExpanded(row.id)}
 									<div class="header-content">
 										{#if interactionType === 'collective'}
- <div class="header-item collective-title">{@html highlightText(entry.collective_name || allPublishers[0] || 'Collective')}</div>
+ <div class="header-item collective-title">{@html highlightText(entry.collective_name || allPublishers[0] || 'Coalition')}</div>
  {:else if interactionType === 'lawsuit'}
 											<div class="header-left">
 												{#if Array.isArray(row.defendant) && row.defendant.length > 0}
@@ -1461,7 +1461,7 @@
 										<div class="interaction-tags">
 											{#each interactionTypes as interaction}
 												<span class="interaction-tag {interaction}">
-													{interaction === 'collective' ? 'Collective' : interaction === 'lawsuit' ? 'Lawsuit' : interaction === 'grant' ? 'Grant' : 'Deal'}
+													{interaction === 'collective' ? 'Coalition' : interaction === 'lawsuit' ? 'Lawsuit' : interaction === 'grant' ? 'Grant' : 'Deal'}
 												</span>
 											{/each}
 										</div>
@@ -1496,18 +1496,18 @@
 
                     {/if}
                     {#if interactionType === 'collective'}
-                     <div class="card-field"><div class="field-label">Collective</div><div class="field-value">{@html highlightText(entry.collective_name || allPublishers[0] || 'Collective')}</div></div>
+                     <div class="card-field"><div class="field-label">Coalition</div><div class="field-value">{@html highlightText(entry.collective_name || allPublishers[0] || 'Coalition')}</div></div>
                     {/if}
 					<div class="card-field news-org-field">
 						<div class="news-org-header">
-							<div class="field-label">{interactionType === 'collective' ? 'Publishers' : interactionType === 'lawsuit' ? 'News Org(s)' : 'Publication(s)'}</div>
+							<div class="field-label">{interactionType === 'lawsuit' ? 'Plaintiff(s)' : 'News Organization(s)'}</div>
 							<div class="affected-note">{interactionType === 'lawsuit' ? '(Organization(s) named in suit)' : '(Organization(s) named in announcement(s) or confirmed by platform)'}</div>
 						</div>
 						<div class="field-value">
                             {#if interactionType === 'collective'}
                              {@const members = entry.collective_publishers?.length ? entry.collective_publishers : allPublishers.filter(name => name !== entry.collective_name)}
                              {#each members as name}<div class="field-item">{@html highlightEntity(row, name)}{@render entityNetworkIcon(row.id, name, 'publisher')}{@render countryFlags(entry, name)}</div>{/each}
-                             {#if !members.length}<span class="collective-empty">Publishers not listed.</span>{/if}
+                             {#if !members.length}<span class="collective-empty">News organizations not listed.</span>{/if}
                             {:else if interactionType === 'grant'}
                              <GrantPublications presentation={grantPresentations(entry)}>
                               {#snippet label(name)}{@html highlightEntity(row, name)}{/snippet}
@@ -1589,22 +1589,23 @@
 
 {#if interactionType === 'collective'}
  {@const history = collectiveTimeline(entry)}
- <div class="card-field collective-status">
-  <div class="field-label">Collective updates</div>
+ <div class="card-field legal-details collective-status">
+  <h3>Coalition updates</h3>
   {#if history.length}
-   <ol class="status-chain" aria-label="Collective status history">
+   <ol class="status-chain" aria-label="Coalition status history">
     {#each history as update (update.id)}
-     <li class="status-chain-step" class:current={update.id === entry.id}>
+     <li class="status-chain-step grant-step" class:current={update.id === entry.id}>
       <span class="status-chain-dot"></span>
-      {#if update.id === entry.id}
-       <span class="status-chain-label">{@html highlightText(update.collective_status || 'Membership update')}</span>
-      {:else}
-       <a class="status-chain-label status-chain-jump" href={`${base}/#card-${encodeURIComponent(update.id)}`} onclick={event => {
-        event.stopPropagation();
-        if (document.getElementById(`card-${update.id}`)) { event.preventDefault(); goToCaseEntry(update.id); }
-       }}>{update.collective_status || 'Membership update'}</a>
-      {/if}
-      <span class="status-chain-date">{formatDate(update.date)}</span>
+      <div class="grant-step-content">
+       {#if update.id === entry.id}
+        <span class="grant-step-date status-chain-label">{formatDate(update.date)}</span>
+       {:else}
+        <a class="grant-step-date status-chain-label status-chain-jump" href={`${base}/#card-${encodeURIComponent(update.id)}`} aria-label={`View coalition update from ${formatDate(update.date)}`} onclick={event => {
+         event.stopPropagation();
+         if (document.getElementById(`card-${update.id}`)) { event.preventDefault(); goToCaseEntry(update.id); }
+        }}>{formatDate(update.date)}</a>
+       {/if}
+      </div>
      </li>
     {/each}
    </ol>
@@ -1878,9 +1879,6 @@
  .complaint-group h4 { margin:0 0 .4rem; font:inherit; font-size:.75rem; font-weight:600; color:#56616b; }
  .complaint-group .claim-tags { margin-top:0; }
 
- .collective-status { margin-top:1rem; }
- .collective-status .field-label { margin-bottom:.6rem; }
- .collective-status .status-chain-step.current .status-chain-dot { background:#9575cd; }
  .card.collective { border-left:3px solid #9575cd; }
  .collective-title { font-weight:600; }
  .interaction-tag.collective { background:#f0eaf8; color:#694395; }
@@ -1900,7 +1898,8 @@
  .expanded-status-tag.consolidated::before {background:#8d6e63;}
  .legal-details .status-chain-label.expanded-status-tag {display:inline; font-size:.8rem; padding:0; background:transparent; border-radius:0; text-decoration:none;}
  .status-chain-label.expanded-status-tag::before {display:none;}
- .legal-details .status-chain-step .status-chain-dot {background:var(--status-color,#666);}
+ .legal-details .status-chain-step .status-chain-dot {background:#cfcfcf; box-shadow:none;}
+ .legal-details .status-chain-step.current .status-chain-dot {background:#666; box-shadow:none;}
  .legal-details button.expanded-status-tag {border:0; cursor:pointer;}
 
 
@@ -2192,7 +2191,7 @@
 	}
 
 	.card.lawsuit .header-left::before {
-		content: 'Defendant';
+		content: 'Defendant(s)';
 	}
 
 	.header-left .header-item {
@@ -2208,7 +2207,7 @@
 	}
 
 	.card-header .header-right-content::before {
-		content: 'Publication(s)';
+		content: 'News Organization(s)';
 		display: block;
 		font-size: 0.65rem;
 		font-weight: 500;
@@ -2219,7 +2218,7 @@
 	}
 
 	.card.lawsuit .header-right-content::before {
-		content: 'Plaintiff';
+		content: 'Plaintiff(s)';
 	}
 
 	.header-right-content .header-item {
@@ -3050,8 +3049,8 @@
 	}
 
 	.status-chain-step.current .status-chain-dot {
-		background-color: var(--status-color, #666);
-		box-shadow: 0 0 0 3px var(--status-glow, rgba(102, 102, 102, 0.2));
+		background-color: #666;
+		box-shadow: none;
 	}
 
 	.status-chain-step.current .status-chain-date {

@@ -33,7 +33,7 @@ test('JSON keeps requested fields and native arrays in a single grouped file',as
  const result=buildJsonExport(rows);
  assert.deepEqual(Object.keys(result),['Deals','Coalitions']);
  assert.deepEqual(Object.keys(result.Deals[0]),exportColumns.deal.map(([label])=>label));
- assert.deepEqual(result.Deals[0]['News Org(s)'],['A','B']);
+ assert.deepEqual(result.Deals[0]['News Organization(s)'],['A','B']);
  assert.equal(Object.hasOwn(result.Deals[0],'Deal ID'),true);
  assert.equal(result.Coalitions[0].Coalition,'SPUR');
  assert.deepEqual(buildJsonExport([]),{});

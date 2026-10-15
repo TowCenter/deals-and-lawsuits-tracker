@@ -57,11 +57,11 @@ export function normalizeData(rawDataArray) {
                 }
             }
             
-            const interaction = normalizeArray(row?.Interaction);
+            const interaction = normalizeArray(row?.Interaction).map(value => /^(collectives?|collections?|coalitions?)$/i.test(String(value).trim()) ? 'Coalitions' : value);
             const grantees = normalizeArray(row?.Grantees);
             const publicationsReceivedGrants = normalizeArray(row?.['Publications Received Grants']);
             const affectedPublications = normalizeArray(row?.['Affected Publications']);
-            const isCollective = interaction.some(value => /^collectives?$/i.test(String(value).trim()));
+            const isCollective = interaction.some(value => /^(collectives?|coalitions?)$/i.test(String(value).trim()));
             const collectiveList = value => typeof value === 'string' ? value.split(',').map(name => name.trim()).filter(Boolean) : normalizeArray(value);
             const namedOrganizations = isCollective ? collectiveList(row?.['News Org(s)']) : normalizeArray(row?.['News Org(s)']);
             // Grant beneficiaries are explicit participants, not ownership descendants.
@@ -74,7 +74,7 @@ export function normalizeData(rawDataArray) {
                 date: isCollective && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(row?.Date || '') ? (() => { const [m,d,y] = row.Date.split('/'); return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`; })() : row?.Date || null,
                 interaction,
                 platform: normalizeArray(row?.['AI Company']),
-                collective_name: normalizeArray(row?.Coalition ?? row?.['Collective Name'] ?? row?.Collective ?? row?.['Collective(s)'])[0] || namedOrganizations[0] || 'Collective',
+                collective_name: normalizeArray(row?.Coalition ?? row?.['Collective Name'] ?? row?.Collective ?? row?.['Collective(s)'])[0] || namedOrganizations[0] || 'Coalition',
                 collective_ids: normalizeArray(row?.Deal_ID ?? row?.Collective_ID ?? row?.Coalition_ID ?? row?.['Collective ID'] ?? row?.['Coalition ID']).map(value => String(value).trim()),
                 collective_status: isValidValue(row?.['Collective Status'] ?? row?.Status) ? String(row?.['Collective Status'] ?? row?.Status) : null,
                 collective_publishers: isCollective ? namedOrganizations : [],

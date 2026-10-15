@@ -4,7 +4,7 @@ import {normalizeName} from './publisherNetwork.js';
 export function coalitionMembership(data) {
  const members = new Map();
  for (const row of data) {
-  if (!(row.interaction || []).some(type => /^collectives?$/i.test(String(type).trim()))) continue;
+  if (!(row.interaction || []).some(type => /^(collectives?|coalitions?)$/i.test(String(type).trim()))) continue;
   const coalition = row.collective_name;
   if (!coalition) continue;
   for (const name of row.collective_publishers || row.organization_publisher_named_in_deal_suit || []) {

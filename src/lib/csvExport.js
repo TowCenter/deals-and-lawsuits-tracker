@@ -1,9 +1,9 @@
-const common = [['Date','date'],['AI Company','platform'],['News Org(s)','named_organizations'],['Affected Publications','affected_publications'],['Type','type'],['Reported Details','reported_details'],['Read More','sources'],['Location','location']];
+const common = [['Date','date'],['AI Company','platform'],['News Organization(s)','named_organizations'],['Affected Publications','affected_publications'],['Type','type'],['Reported Details','reported_details'],['Read More','sources'],['Location','location']];
 export const exportColumns = {
  deal:[['Interaction','interaction'],['Deal ID','deal_ids'],...common],
  grant:[['Interaction','interaction'],['grant ID','grant_ids'],...common],
  lawsuit:[['Interaction','interaction'],['Lawsuit ID','lawsuit_ids'],['Date','date'],['Defendant','defendant'],['Plaintiff','plaintiff'],['Status','status'],['Case Number','case_number'],['Case Filing','case_filing'],['Docket','docket'],...['number','name','court','docket','docket_url','initiated_date','joined_date','source'].map(field=>[`MDL ${field.replaceAll('_',' ')}`,`mdl_${field}`]),['Location','location'],['Additional Coverage','additional_coverage']],
- collective:[['Interaction','interaction'],['Deal ID','deal_ids'],['Date','date'],['Coalition','collective_name'],['News Org(s)','named_organizations'],['Affected Publications','affected_publications'],['Reported Details','reported_details'],['Primary Sources','primary_sources']]
+ collective:[['Interaction','interaction'],['Deal ID','deal_ids'],['Date','date'],['Coalition','collective_name'],['News Organization(s)','named_organizations'],['Affected Publications','affected_publications'],['Reported Details','reported_details'],['Primary Sources','primary_sources']]
 };
 const typeKey = value => ({deals:'deal',grants:'grant',lawsuits:'lawsuit',collectives:'collective',coalitions:'collective',coalition:'collective'}[String(value).trim().toLowerCase()] || String(value).trim().toLowerCase());
 const quote = value => `"${String(Array.isArray(value) ? value.filter(item=>item != null && String(item).trim()).join('; ') : value ?? '').replaceAll('"','""')}"`;
