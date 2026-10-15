@@ -76,7 +76,7 @@ export function normalizeData(rawDataArray) {
                 platform: normalizeArray(row?.['AI Company']),
                 collective_name: normalizeArray(row?.Coalition ?? row?.['Collective Name'] ?? row?.Collective ?? row?.['Collective(s)'])[0] || namedOrganizations[0] || 'Coalition',
                 collective_ids: normalizeArray(row?.Deal_ID ?? row?.Collective_ID ?? row?.Coalition_ID ?? row?.['Collective ID'] ?? row?.['Coalition ID']).map(value => String(value).trim()),
-                collective_status: isValidValue(row?.['Collective Status'] ?? row?.Status) ? String(row?.['Collective Status'] ?? row?.Status) : null,
+                collective_status: isValidValue(row?.['Coalition Status'] ?? row?.['Collective Status'] ?? row?.Status) ? String(row?.['Coalition Status'] ?? row?.['Collective Status'] ?? row?.Status).trim().replace(/^update$/i, 'Membership update') : null,
                 collective_publishers: isCollective ? namedOrganizations : [],
                 publishers,
                 type: normalizeArray(row?.Type),
@@ -102,6 +102,7 @@ export function normalizeData(rawDataArray) {
                 // Lawsuit-specific fields
                 // Rows sharing a lawsuit_id are the SAME case at different points in time,
                 // not related cases. CardView merges them into one card with a status track.
+                grant_status: isValidValue(row?.['Grant Status'] ?? row?.Status) ? String(row?.['Grant Status'] ?? row?.Status) : null,
                 grant_ids: normalizeArray(row?.Grant_ID ?? row?.grant_id ?? row?.['Grant ID']).map(value => String(value).trim()),
                 grant_id: normalizeArray(row?.Grant_ID ?? row?.grant_id ?? row?.['Grant ID']).map(value => String(value).trim())[0] || null,
                 lawsuit_ids: normalizeArray(row?.Lawsuit_ID),

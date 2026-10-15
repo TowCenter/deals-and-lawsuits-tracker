@@ -37,6 +37,16 @@
  });
  const relationships = $derived(createPublisherRelationshipIndex(data));
 	let networkRow = $state(null);
+ let expandedHeaderPublishers = $state(new Set());
+ function toggleHeaderPublishers(event, id) {
+  event.stopPropagation();
+  const next = new Set(expandedHeaderPublishers);
+  if (next.has(id)) next.delete(id); else next.add(id);
+  expandedHeaderPublishers = next;
+ }
+ function headerPublishers(names, id) {
+  return names.length >= 10 && !expandedHeaderPublishers.has(id) ? names.slice(0,3) : names;
+ }
  let networkEntity = $state(null);
  function openEntityNetwork(event, name, type) {
   event.stopPropagation();
@@ -1358,6 +1368,7 @@
 			{@const interactionTypes = getInteractionTypes(row.interaction)}
 			{@const interactionType = getInteractionType(row.interaction)}
 						{@const entry = row}
+{@const headerStatus = interactionType === 'collective' ? entry.collective_status || entry.status : interactionTypes.includes('grant') && !interactionTypes.includes('lawsuit') ? entry.grant_status || entry.status : interactionTypes.includes('lawsuit') ? entry.status : null}
 						{@const allPublishers = interactionType === 'grant' && Array.isArray(entry.named_organizations) && entry.named_organizations.length ? entry.named_organizations : (entry.organization_publisher_named_in_deal_suit || [])}
 
 							{@const allSources = normalizeSources(entry.sources)}
@@ -1425,10 +1436,10 @@
 											<div class="header-separator"></div>
 											<div class="header-right-content">
 												{#if Array.isArray(row.plaintiff) && row.plaintiff.length > 0}
-													{#each row.plaintiff as plaintiff}
+													{#each headerPublishers(row.plaintiff, row.id) as plaintiff}
 														<div class="header-item">{@html highlightEntity(row, plaintiff)}
 {@render entityNetworkIcon(row.id, plaintiff, 'publisher')}</div>
-													{/each}
+													{/each}{#if row.plaintiff.length >= 10}<button type="button" class="header-see-more" aria-expanded={expandedHeaderPublishers.has(row.id)} onclick={event => toggleHeaderPublishers(event,row.id)} onkeydown={event => event.stopPropagation()}>{expandedHeaderPublishers.has(row.id) ? 'See less' : `See ${row.plaintiff.length - 3} more`}</button>{/if}
 												{/if}
 											</div>
 										{:else}
@@ -1443,21 +1454,22 @@
 											<div class="header-separator"></div>
 											<div class="header-right-content">
 												{#if Array.isArray(allPublishers) && allPublishers.length > 0}
-													{#each allPublishers as pub}
+													{#each headerPublishers(allPublishers, row.id) as pub}
 														<div class="header-item">{@html highlightEntity(row, pub)}
 {@render entityNetworkIcon(row.id, pub, 'publisher')}</div>
-													{/each}
+													{/each}{#if allPublishers.length >= 10}<button type="button" class="header-see-more" aria-expanded={expandedHeaderPublishers.has(row.id)} onclick={event => toggleHeaderPublishers(event,row.id)} onkeydown={event => event.stopPropagation()}>{expandedHeaderPublishers.has(row.id) ? 'See less' : `See ${allPublishers.length - 3} more`}</button>{/if}
 												{/if}
 											</div>
 										{/if}
 								</div>
 									{/if}
 									<div class="header-right">
-										{#if !isCardExpanded(row.id) && interactionTypes.includes('lawsuit') && entry.status}
-											<span class="status-badge header-status {getStatusClass(entry.status)}" aria-label="Status: {entry.status}">
-												<span class="status-text">{@html highlightText(entry.status)}</span>
-											</span>
-										{/if}
+										
+                                        {#if !isCardExpanded(row.id) && headerStatus && !(/announcement/i.test(headerStatus) && (interactionType === 'collective' || (interactionTypes.includes('grant') && !interactionTypes.includes('lawsuit'))))}
+                                         <span class="status-badge header-status {getStatusClass(headerStatus)}" aria-label="Status: {headerStatus}">
+                                          <span class="status-text">{@html highlightText(headerStatus)}</span>
+                                         </span>
+                                        {/if}
 										<div class="interaction-tags">
 											{#each interactionTypes as interaction}
 												<span class="interaction-tag {interaction}">
@@ -1594,18 +1606,18 @@
   {#if history.length}
    <ol class="status-chain" aria-label="Coalition status history">
     {#each history as update (update.id)}
-     <li class="status-chain-step grant-step" class:current={update.id === entry.id}>
+     <li class="status-chain-step" class:current={update.id === entry.id}>
       <span class="status-chain-dot"></span>
-      <div class="grant-step-content">
+      
        {#if update.id === entry.id}
-        <span class="grant-step-date status-chain-label">{formatDate(update.date)}</span>
+        <span class="grant-step-date status-chain-label">{update.collective_status || update.status || 'Status not reported'}</span>
        {:else}
         <a class="grant-step-date status-chain-label status-chain-jump" href={`${base}/#card-${encodeURIComponent(update.id)}`} aria-label={`View coalition update from ${formatDate(update.date)}`} onclick={event => {
          event.stopPropagation();
          if (document.getElementById(`card-${update.id}`)) { event.preventDefault(); goToCaseEntry(update.id); }
-        }}>{formatDate(update.date)}</a>
+        }}>{update.collective_status || update.status || 'Status not reported'}</a>
        {/if}
-      </div>
+      <span class="status-chain-date">{formatDate(update.date)}</span>
      </li>
     {/each}
    </ol>
@@ -1617,16 +1629,16 @@
 
 {#if interactionType === 'grant'}
  {@const updates = grantTimeline(entry)}
- {#if updates.length > 1}
+ {#if updates.length > 1 || entry.grant_status || entry.status}
  <div class="card-field legal-details grant-timeline">
   <h3>Grant updates</h3>
   <ol class="status-chain" aria-label="Grant updates, oldest first">
-   {#each updates as update (update.id)}
-    <li class="status-chain-step grant-step" class:current={update.id === entry.id}>
+   {#each updates.length ? updates : [entry] as update (update.id)}
+    <li class="status-chain-step" class:current={update.id === entry.id}>
      <span class="status-chain-dot"></span>
-     <div class="grant-step-content">
+     
       {#if update.id === entry.id}
-       <span class="grant-step-date status-chain-label">{formatDate(update.date)}</span>
+       <span class="grant-step-date status-chain-label">{update.grant_status || update.status || 'Status not reported'}</span>
       {:else}
        <a class="grant-step-date status-chain-label status-chain-jump" href={`${base}/#card-${encodeURIComponent(update.id)}`} aria-label={`View grant update from ${formatDate(update.date)}`} onclick={event => {
         event.stopPropagation();
@@ -1634,9 +1646,9 @@
          event.preventDefault();
          goToCaseEntry(update.id);
         }
-       }}>{formatDate(update.date)}</a>
+       }}>{update.grant_status || update.status || 'Status not reported'}</a>
       {/if}
-     </div>
+     <span class="status-chain-date">{formatDate(update.date)}</span>
     </li>
    {/each}
   </ol>
@@ -1875,6 +1887,9 @@
 </div>
 
 <style>
+ .header-see-more { align-self:flex-start; padding:.2rem 0; margin-top:.2rem; border:0; background:transparent; color:#254c6f; font:inherit; font-size:.75rem; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+ .header-see-more:focus-visible { outline:2px solid #254c6f; outline-offset:3px; }
+
  .complaint-groups { display:flex; flex-direction:column; gap:.85rem; margin-top:.65rem; }
  .complaint-group h4 { margin:0 0 .4rem; font:inherit; font-size:.75rem; font-weight:600; color:#56616b; }
  .complaint-group .claim-tags { margin-top:0; }
@@ -3277,4 +3292,13 @@
  .card.collective.collapsed .header-right { margin:0; padding:0; border:0; width:auto; order:initial; }
  .card.collective.collapsed .card-header { flex-direction:row; align-items:center; flex-wrap:nowrap; gap:.75rem; }
  .card.collective.collapsed .header-date { position:static; flex:0 0 auto; margin:0; padding:0; order:initial; }
+ @media (max-width:768px) {
+  .card.collective.collapsed .card-header { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.65rem; padding:1rem !important; }
+  .card.collective.collapsed .header-date { grid-column:1; grid-row:1; }
+  .card.collective.collapsed .header-right { grid-column:1 / -1; grid-row:3; display:flex; flex-wrap:wrap; justify-content:flex-start; min-width:0; gap:.5rem; }
+  .card.collective.collapsed .header-content { grid-column:1 / -1; grid-row:2; min-width:0; order:initial; }
+  .card.collective.collapsed .collective-title { white-space:normal; overflow-wrap:anywhere; }
+  .card.collective.collapsed .expand-icon { margin-left:auto; }
+  .card.collective.collapsed .header-status { white-space:normal; min-width:0; }
+ }
 </style>
