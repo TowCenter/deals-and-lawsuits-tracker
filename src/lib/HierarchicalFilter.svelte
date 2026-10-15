@@ -1,4 +1,5 @@
 <script>
+ import {groupLegalComplaints} from './legalComplaints.js';
 	import { onMount } from 'svelte';
 	import { parseArray, matchesSearch } from './utils.js';
 
@@ -92,7 +93,7 @@
 			
 			// Include if any of its types match the search
 			const types = getTypesByInteraction(interaction);
-			return types.some(type => matchesSearch(type, searchTerm));
+			return types.some(type => matchesSearch(type, searchTerm)) || (interaction.toLowerCase() === 'lawsuit' && groupLegalComplaints(types).some(group => matchesSearch(group.name, searchTerm)));
 		});
 	}
 
@@ -110,11 +111,20 @@
 		if (selectedInteraction.includes(interaction)) return true;
 		if (searchTerm) {
 			const types = getTypesByInteraction(interaction);
-			return types.some(type => matchesSearch(type, searchTerm));
+			return types.some(type => matchesSearch(type, searchTerm)) || (interaction.toLowerCase() === 'lawsuit' && groupLegalComplaints(types).some(group => matchesSearch(group.name, searchTerm)));
 		}
 		return false;
 	}
 
+ function typeGroups(interaction) {
+  if (interaction.toLowerCase() !== 'lawsuit') return [{name:'', claims:getFilteredTypesForInteraction(interaction)}];
+  return groupLegalComplaints(getTypesByInteraction(interaction)).map(group => ({...group, claims:!searchTerm || matchesSearch(interaction,searchTerm) || matchesSearch(group.name,searchTerm) ? group.claims : group.claims.filter(type => matchesSearch(type,searchTerm))})).filter(group => group.claims.length);
+ }
+ function toggleComplaintGroup(claims) {
+  const enabled = claims.filter(type => !isDead(type, availableTypes, selectedType));
+  const allSelected = enabled.length && enabled.every(type => selectedType.includes(type));
+  onTypeChange(allSelected ? selectedType.filter(type => !enabled.includes(type)) : [...new Set([...selectedType,...enabled])]);
+ }
 	function toggleInteraction(interaction) {
 		const newSelected = selectedInteraction.includes(interaction)
 			? selectedInteraction.filter(i => i !== interaction)
@@ -262,7 +272,15 @@
 
 								{#if shouldShowTypes(interaction)}
 									<div class="types-section">
-										{#each getFilteredTypesForInteraction(interaction) as type}
+										{#each typeGroups(interaction) as group}
+           {#if group.name}
+            <label class="complaint-category">
+             <input type="checkbox" class="checkbox" checked={group.claims.every(type => selectedType.includes(type))} indeterminate={group.claims.some(type => selectedType.includes(type)) && !group.claims.every(type => selectedType.includes(type))} disabled={group.claims.every(type => isDead(type,availableTypes,selectedType))} onchange={() => toggleComplaintGroup(group.claims)} />
+             <span>{group.name}</span>
+            </label>
+           {/if}
+           <div class:grouped-claims={!!group.name}>
+           {#each group.claims as type}
 											<label
 												class="type-item"
 												class:unavailable={isDead(type, availableTypes, selectedType)}
@@ -277,6 +295,8 @@
 												<span class="type-text">{type}</span>
 											</label>
 										{/each}
+           </div>
+           {/each}
 									</div>
 								{/if}
 							</div>
@@ -289,6 +309,18 @@
 </div>
 
 <style>
+ .complaint-category { display:flex; align-items:flex-start; gap:.5rem; margin:.35rem .6rem 0; padding:.65rem .6rem; border-top:1px solid #e5e8eb; color:#35495b; font-size:.8rem; font-weight:600; line-height:1.4; cursor:pointer; border-radius:3px; }
+ .complaint-category:hover { background:#edf2f6; }
+ .complaint-category:has(input:checked),.complaint-category:has(input:indeterminate) { background:#edf2f6; }
+ .complaint-category:has(input:disabled) { color:#aaa; cursor:default; }
+ .complaint-category .checkbox { margin: .1rem 0 0; }
+ .complaint-category:focus-within { outline:2px solid #8ca4b9; outline-offset:-2px; }
+ .grouped-claims { margin:0 1.2rem .65rem 1.65rem; border-left:1px solid #dde3e9; padding-left:.4rem; }
+ .grouped-claims .type-item { align-items:flex-start; padding:.4rem .5rem; font-size:.78rem; line-height:1.45; border-radius:3px; }
+ .grouped-claims .type-item .checkbox { margin:.15rem .5rem 0 0; }
+ .grouped-claims .type-item:has(input:checked) { background:#f0f3f6; }
+ .grouped-claims .type-item:hover { background:#edf0f3; }
+
 	.hierarchical-filter-container {
 		display: flex;
 		flex-direction: column;

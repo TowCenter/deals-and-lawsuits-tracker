@@ -1,4 +1,5 @@
 <script>
+ import {groupLegalComplaints} from './legalComplaints.js';
 	import { base } from '$app/paths';
  import { createGrantTimelineIndex } from './grantTimeline.js';
  const grantTimeline = $derived(createGrantTimelineIndex(data));
@@ -1670,7 +1671,14 @@
  {#if claims.length}
  <details class="legal-disclosure">
   <summary><span class="field-label">Complaint(s)</span><span class="disclosure-action">{claims.length} {claims.length === 1 ? 'claim' : 'claims'} <span class="disclosure-open-label">Show</span><span class="disclosure-close-label">Hide</span></span></summary>
-  <div class="claim-tags type-tags-wrapper">{#each claims as claim}<span class="type-tag">{@html highlightText(claim)}</span>{/each}</div>
+  <div class="complaint-groups">
+   {#each groupLegalComplaints(claims) as group}
+    <section class="complaint-group">
+     <h4>{group.name}</h4>
+     <div class="claim-tags type-tags-wrapper">{#each group.claims as claim}<span class="type-tag">{@html highlightText(claim)}</span>{/each}</div>
+    </section>
+   {/each}
+  </div>
  </details>
  {/if}
 {/if}
@@ -1866,6 +1874,10 @@
 </div>
 
 <style>
+ .complaint-groups { display:flex; flex-direction:column; gap:.85rem; margin-top:.65rem; }
+ .complaint-group h4 { margin:0 0 .4rem; font:inherit; font-size:.75rem; font-weight:600; color:#56616b; }
+ .complaint-group .claim-tags { margin-top:0; }
+
  .collective-status { margin-top:1rem; }
  .collective-status .field-label { margin-bottom:.6rem; }
  .collective-status .status-chain-step.current .status-chain-dot { background:#9575cd; }
