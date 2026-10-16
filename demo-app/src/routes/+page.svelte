@@ -214,6 +214,7 @@ Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> wit
 
         <!-- Card View -->
         <CardView
+            {latestDate}
             showNetworks={false}
             showEntityNetworks={true}
             data={partnerships}

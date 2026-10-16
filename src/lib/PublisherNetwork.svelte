@@ -9,7 +9,7 @@
  import { onMount, tick, untrack } from 'svelte';
  import { formatDate } from './utils.js';
  import { publisherNames as names, normalizeName as normalize, ownershipFamily, publisherAndAncestors, layoutOwnership, layoutCirclePacking, networkRouteCache, routeCircleConnection } from './publisherNetwork.js';
- let { row, data = [], onclose, recordCard, entityName = null, entityPlatform = null } = $props();
+ let { row, data = [], latestDate = '', onclose, recordCard, entityName = null, entityPlatform = null } = $props();
  const componentId = $props.id();
  let selectedRecord = $state(null);
  let selectedOrigin = $state(untrack(() => !entityName));
@@ -638,7 +638,7 @@
  {#if displayNodes.some(node => coalitionMembers.has(node.key))}
   <div class="coalition-key"><span aria-hidden="true"></span>Purple outline = coalition member</div>
  {/if}
- <div class="network-branding"><img class="tow-watermark" src={towLogo} alt="Tow Center for Digital Journalism" draggable="false" /><div class="network-source"><span class="as-of-date">Data as of 10/13/26</span><a href="https://tow.cjr.org/ai-deals-lawsuits/" target="_blank" rel="noopener noreferrer">tow.cjr.org/ai-deals-lawsuits</a></div></div>
+ <div class="network-branding"><img class="tow-watermark" src={towLogo} alt="Tow Center for Digital Journalism" draggable="false" /><div class="network-source">{#if latestDate}<span class="as-of-date">Data as of {latestDate}</span>{/if}<a href="https://tow.cjr.org/ai-deals-lawsuits/" target="_blank" rel="noopener noreferrer">tow.cjr.org/ai-deals-lawsuits</a></div></div>
  </div>
 
  {#if panelRecords.length}

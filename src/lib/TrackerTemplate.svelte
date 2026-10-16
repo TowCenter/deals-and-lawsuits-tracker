@@ -118,6 +118,7 @@
 		/>
 
 		<CardView 
+			latestDate={displayDate}
 			{data}
 			{columns}
 			{searchQuery}

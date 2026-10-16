@@ -72,6 +72,7 @@
 	 * @property {string[]} [filterPublishers=[]] - Filter by publishers
 	 * @property {string[]} [filterLocation=[]] - Filter by locations
 	 * @property {boolean} [showCountries=false] - Show the country code beside every name
+	 * @property {string} [latestDate] - Latest tracker update date
 	 * @property {(data: Array<Object>) => void} [onFilteredDataChange=() => {}] - Callback when filtered data changes
 	 * @property {(values: Object<string, Set<string>>) => void} [onAvailableValuesChange=() => {}] - Callback with the values each filter can still return rows for
 	 */
@@ -79,6 +80,7 @@
 	/** @type {Props} */
 	let {
 		data = [],
+		latestDate = '',
 		showNetworks = true,
         showSharing = true,
 		showEntityNetworks = false,
@@ -1310,7 +1312,7 @@
 {/snippet}
 
 {#if networkRow}
- <PublisherNetwork row={networkRow} {data} entityName={networkEntity?.name} entityPlatform={networkEntity?.type === 'platform' ? networkEntity.name : null} onclose={() => { networkRow = null; networkEntity = null; }}>
+ <PublisherNetwork row={networkRow} {data} {latestDate} entityName={networkEntity?.name} entityPlatform={networkEntity?.type === 'platform' ? networkEntity.name : null} onclose={() => { networkRow = null; networkEntity = null; }}>
   {#snippet recordCard(selectedEntries, expandRecord, selectedEntityName)}
    {#key selectedEntries.map(entry => entry.id).join(',') + expandRecord}
     <CardView {data} highlightedEntity={selectedEntityName} showSharing={false} showNetworks={false} showEntityNetworks={false} focusedRecordId={expandRecord && selectedEntries.length === 1 ? selectedEntries[0]?.id : null} focusedRecordIds={selectedEntries.map(entry => entry.id)} {showCountries} />
