@@ -121,7 +121,7 @@
 		return Array.from(unique).sort();
 	});
 
-	const locationGroups = $derived(groupPlacesByContinent(locationOptions, countryIndex.flags));
+	const locationGroups = $derived(groupPlacesByContinent(locationOptions, countryIndex.flags).filter(group => group.label !== 'Elsewhere'));
 </script>
 
 <div class="filter-bar">

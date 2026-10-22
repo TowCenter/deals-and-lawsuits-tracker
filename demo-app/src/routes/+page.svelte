@@ -1,5 +1,16 @@
 <script>
  import {downloadJsonExport} from '../../../src/lib/csvExport.js';
+    import LocationMatrix from '../../../src/lib/LocationMatrix.svelte';
+    let activityView = $state('charts');
+    import NetworkTimeline from '../../../src/lib/NetworkTimeline.svelte';
+    import { buildOwnershipGraph } from '../../../src/lib/publisherNetwork.js';
+    import { isMdlConsolidation } from '../../../src/lib/mdl.js';
+    let homeCutoff = $state(null);
+    let chartMetric = $state('cards');
+    let chartSmooth = $state(false);
+    let chartRecords = $state.raw([]);
+    const homeRecords = $derived(chartRecords.filter(record => !isMdlConsolidation(record) && (record.interaction || []).some(kind => /^(deal|grant|lawsuit)$/i.test(kind))));
+    const homeOwnership = $derived(buildOwnershipGraph(partnerships));
     import { onMount } from 'svelte';
     import { normalizeData } from '../../../src/lib/trackerData.js';
     import Head from "../../../src/lib/Head.svelte";
@@ -212,12 +223,41 @@ Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> wit
             onDownloadCSV={downloadToCSV}
         />
 
+        <div class="home-activity charts-container">
+        <div class="view-tabs" role="group" aria-label="Activity view">
+            <button type="button" aria-pressed={activityView === 'charts'} onclick={() => activityView='charts'}>Time charts</button>
+            <button type="button" aria-pressed={activityView === 'locations'} onclick={() => activityView='locations'}>Location matrix</button>
+        </div>
+        {#if activityView === 'charts'}
+        <div class="chart-controls" role="group" aria-label="Shared chart controls">
+            <select aria-label="Chart counts" bind:value={chartMetric}>
+                <option value="cards">Cards</option>
+                <option value="direct">Publishers — direct</option>
+                <option value="descendants">Publishers + children</option>
+                <option value="reported">Reported publisher counts</option>
+            </select>
+            <label><input type="checkbox" bind:checked={chartSmooth} />3-mo avg (monthly chart)</label>
+            <button type="button" onclick={() => homeCutoff = null} disabled={homeCutoff == null}>All dates</button>
+        </div>
+        <section class="chart-panel" aria-label="Activity matching filters">
+            <NetworkTimeline records={homeRecords} ownership={homeOwnership} bind:metric={chartMetric} bind:smooth={chartSmooth} showControls={false} bind:cutoff={homeCutoff} />
+        </section>
+        <section class="chart-panel cumulative-activity" aria-label="Cumulative lawsuits and deals">
+            <h2>Cumulative <strong>lawsuits</strong> and <strong>deals</strong> between AI and media companies</h2>
+            <NetworkTimeline records={homeRecords.filter(record => record.interaction.some(kind => /^(deal|lawsuit)$/i.test(kind)))} ownership={homeOwnership} cumulative bind:metric={chartMetric} showControls={false} bind:cutoff={homeCutoff} />
+        </section>
+        {:else}
+            <LocationMatrix records={homeRecords} data={partnerships} bind:cutoff={homeCutoff} />
+        {/if}
+        </div>
         <!-- Card View -->
         <CardView
             {latestDate}
             showNetworks={false}
             showEntityNetworks={true}
             data={partnerships}
+            dateCutoff={homeCutoff}
+            onTimelineDataChange={(records) => { chartRecords = records; }}
             {searchQuery}
             {filterInteraction}
             {filterType}
@@ -231,3 +271,21 @@ Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> wit
     {/if}
 </Article>
 <Footer />
+
+<style>
+ .home-activity { margin:1rem auto 2rem; max-width:900px; }
+
+ .view-tabs { display:flex; gap:1rem; padding:.7rem 1rem; border-bottom:1px solid #e0e0e0; }
+ .view-tabs button { border:0; border-bottom:2px solid transparent; padding:.2rem 0; background:transparent; font:inherit; font-size:.75rem; color:#666; cursor:pointer; }
+ .view-tabs button[aria-pressed="true"] { color:#254c6f; border-color:#DE5A35; }
+ .charts-container { border:1px solid #e0e0e0; background:#fafafa; }
+ .chart-panel + .chart-panel { border-top:1px solid #e0e0e0; }
+ .chart-panel :global(.timeline) { border:0; }
+ .chart-controls { display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; padding:.6rem 1rem; box-sizing:border-box; border-bottom:1px solid #e0e0e0; background:#fafafa; font-size:.75rem; }
+ .chart-controls select,.chart-controls button { font:inherit; padding:.35rem .55rem; border:1px solid #ccc; border-radius:0; background:#fff; color:#333; cursor:pointer; }
+ .chart-controls button { color:#254c6f; } .chart-controls button:disabled { opacity:.5; cursor:default; }
+ .chart-controls label { display:flex; align-items:center; gap:.4rem; } .chart-controls input { accent-color:#DE5A35; }
+ .chart-controls :focus-visible { outline:2px solid #DE5A35; outline-offset:2px; }
+ .cumulative-activity h2 { font-family:inherit; font-size:1rem; font-weight:400; line-height:1.4; color:#333; margin:0; padding:.75rem 1rem .25rem; }
+ @media (max-width:932px) { .home-activity { margin:1rem 1rem 2rem; } }
+</style>

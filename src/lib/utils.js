@@ -318,12 +318,12 @@ export function groupPlacesByContinent(places, flags) {
 		const named = getPlaceLabel(place, flags).toLowerCase();
 
 		const continent = CONTINENTS.find(([label, codes]) =>
-			code ? codes.split(' ').includes(code) : label.toLowerCase() === named
+			code ? codes.split(' ').includes(code) : label.toLowerCase() === named || (label === 'Europe' && named === 'nordics')
 		);
 
 		// Only a place that reached its continent by naming it is folded into the
 		// heading; one that simply has no continent stays a row of its own
-		const namesItsContinent = Boolean(continent) && !code;
+		const namesItsContinent = Boolean(continent) && !code && continent[0].toLowerCase() === named;
 		const label = continent ? continent[0] : ELSEWHERE;
 		(namesItsContinent ? implied : grouped).get(label).push(place);
 	}

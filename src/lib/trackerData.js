@@ -81,6 +81,7 @@ export function normalizeData(rawDataArray) {
                 publishers,
                 type: normalizeArray(row?.Type),
                 reported_details: row?.['Reported Details'] || '',
+                reported_numbers: row?.['Reported Numbers'] ?? null,
                 organization_publisher_named_in_deal_suit: interaction.some(value => String(value).toLowerCase() === 'grant')
                     ? [...new Set([...namedOrganizations, ...grantees])]
                     : namedOrganizations,

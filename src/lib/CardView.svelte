@@ -1,4 +1,5 @@
 <script>
+ import { throughDate } from './networkTimeline.js';
  import {groupLegalComplaints} from './legalComplaints.js';
 	import { base } from '$app/paths';
  import { createGrantTimelineIndex } from './grantTimeline.js';
@@ -65,6 +66,8 @@
 	 * @property {boolean} [showSharing=true] - Show sharing controls on main cards
 	 * @property {boolean} [showNetworks=true] - Show per-record network buttons
 	 * @property {Array<Object>} [data=[]] - Card data rows
+	 * @property {string|null} [dateCutoff=null] - Inclusive date cutoff for cards
+	 * @property {Function} [onTimelineDataChange] - Matching records before the date cutoff
 	 * @property {string} [searchQuery=''] - Search query string
 	 * @property {string[]} [filterInteraction=[]] - Filter by interactions
 	 * @property {string[]} [filterType=[]] - Filter by types
@@ -95,6 +98,8 @@
 		filterLocation = [],
 		showCountries = false,
 		onFilteredDataChange = () => {},
+        onTimelineDataChange = () => {},
+        dateCutoff = null,
 		onAvailableValuesChange = () => {}
 	} = $props();
 
@@ -733,7 +738,9 @@
 		onAvailableValuesChange(availableValues);
 	});
 
-	let filteredData = $derived(getFilteredAndSorted());
+	const matchingData = $derived(getFilteredAndSorted());
+    let filteredData = $derived(throughDate(matchingData, dateCutoff));
+    $effect(() => { onTimelineDataChange(matchingData); });
 	let groupedData = $derived(groupByMonth(filteredData));
  $effect(() => {
   const target = focusedRecordIds == null && focusedRecordId == null && sharedCardId != null ? filteredData.find(row => String(row.id) === sharedCardId) : null;
