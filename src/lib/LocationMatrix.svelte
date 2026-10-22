@@ -2,6 +2,7 @@
  import { buildLocationMatrix, matrixCellRecords } from './locationMatrix.js';
  let {records = [], data = records, cutoff = $bindable(null), metric = $bindable('cards'), onSelectionChange = () => {}} = $props();
  let legendCategory = $state(null);
+ let locationView = $state('countries');
  let sortField = $state(null);
  let sortDirection = $state('desc');
  let sortCategory = $state('all');
@@ -27,7 +28,10 @@
   else {sortField=field;sortDirection=field==='location'?'asc':'desc';}
  }
  const arrow = field => sortField === field ? sortDirection === 'asc' ? ' ↑' : ' ↓' : '';
- const rows = $derived(sorted(matrix.regions).flatMap(region => [
+ const countryRows = $derived(matrix.regions.flatMap(region => region.countries.length
+  ? region.countries.map(country=>({...country,key:`${region.label}:${country.key}`,continent:false}))
+  : [{...region,key:region.label,continent:false}]));
+ const rows = $derived(locationView === 'countries' ? sorted(countryRows) : sorted(matrix.regions).flatMap(region => [
   {...region,key:region.label,continent:true},
   ...(expanded.has(region.label) ? sorted(region.countries).map(country=>({...country,key:`${region.label}:${country.key}`,continent:false})) : [])
  ]));
@@ -64,8 +68,12 @@
    <option value="descendants">Publishers + children</option>
    <option value="reported">Reported publisher counts</option>
   </select>
+  <select aria-label="Group matrix locations" bind:value={locationView}>
+   <option value="countries">Countries</option>
+   <option value="continents">Continents and countries</option>
+  </select>
   <select aria-label="Sort matrix counts by category" bind:value={sortCategory}><option value="all">Sort: all categories</option>{#each visibleKinds as kind}<option value={kind.key}>Sort: {kind.label}</option>{/each}</select>
-  <button type="button" onclick={() => expanded = expanded.size ? new Set() : new Set(matrix.regions.map(region=>region.label))}>{expanded.size ? 'Collapse countries' : 'Expand countries'}</button>
+  {#if locationView === 'continents'}<button type="button" onclick={() => expanded = expanded.size ? new Set() : new Set(matrix.regions.map(region=>region.label))}>{expanded.size ? 'Collapse countries' : 'Expand countries'}</button>{/if}
   <button type="button" disabled={cutoff == null && selectedCell == null} onclick={() => {cutoff=null; selectedCell=null;}}>All dates</button>
  </div>
  {#if selectedCell}<div class="selection-summary" role="status">{selectedCell.location} · {selectedCell.month} · {selectedCell.category}<button type="button" onclick={()=>selectedCell=null}>Clear selection</button></div>{/if}
@@ -80,7 +88,7 @@
    <div class="matrix-row year-header" role="row"><span role="columnheader"></span>{#each years as year}<span role="columnheader" style:grid-column={`span ${year.count}`}>{year.year}</span>{/each}<span role="columnheader"></span></div>
    {#each rows as row (row.key)}
     <div class="matrix-row" class:continent={row.continent} role="row">
-     <div class="place" class:country={!row.continent} role="rowheader">
+     <div class="place" class:country={!row.continent && locationView === 'continents'} role="rowheader">
       {#if row.continent && row.countries.length}<button class="place-toggle" type="button" aria-expanded={expanded.has(row.label)} onclick={()=>toggle(row.label)}>{expanded.has(row.label)?'−':'+'} {row.label}</button>{:else}{row.label}{/if}
      </div>
      {#each row.values as point}
