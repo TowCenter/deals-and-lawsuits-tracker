@@ -29,3 +29,12 @@ test('grant updates count once per row and unlocated records remain visible', ()
  assert.equal(result.regions.find(row=>row.label==='Unspecified location').values[0].lawsuit,1);
  assert.deepEqual(buildLocationMatrix([]).regions,[]);
 });
+
+test('matrix supports direct, child and reported publisher metrics', () => {
+ const records=[{id:1,date:'2024-01-01',interaction:['Deal'],location:['France'],organization_publisher_named_in_deal_suit:['Parent'],reported_numbers:'200',parent_child_matches:[{lineage:['Parent','Child','Grandchild']}]}];
+ const count = metric => buildLocationMatrix(records,records,metric).regions.find(row=>row.label==='Europe').values[0].deal;
+ assert.equal(count('cards'),1);
+ assert.equal(count('direct'),1);
+ assert.equal(count('descendants'),3);
+ assert.equal(count('reported'),200);
+});

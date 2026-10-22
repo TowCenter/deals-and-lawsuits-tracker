@@ -247,7 +247,7 @@ Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> wit
             <NetworkTimeline records={homeRecords.filter(record => record.interaction.some(kind => /^(deal|lawsuit)$/i.test(kind)))} ownership={homeOwnership} cumulative bind:metric={chartMetric} showControls={false} bind:cutoff={homeCutoff} />
         </section>
         {:else}
-            <LocationMatrix records={homeRecords} data={partnerships} bind:cutoff={homeCutoff} />
+            <LocationMatrix records={homeRecords} data={partnerships} bind:metric={chartMetric} bind:cutoff={homeCutoff} />
         {/if}
         </div>
         <!-- Card View -->

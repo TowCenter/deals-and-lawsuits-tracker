@@ -1,15 +1,17 @@
 import { buildCountryIndex, getRowLocations, groupPlacesByContinent } from './utils.js';
+import { buildOwnershipGraph } from './publisherNetwork.js';
 import { activitySeries, timelineDate } from './networkTimeline.js';
 
 /** Use explicit record geography; continent totals deduplicate multi-country records. */
-export function buildLocationMatrix(records, allData = records) {
+export function buildLocationMatrix(records, allData = records, metric = 'cards') {
+ const ownership = buildOwnershipGraph(allData);
  const countryIndex = buildCountryIndex(allData);
  const placesByRecord = new Map(records.map(record => [record, getRowLocations(record, countryIndex)]));
  const places = [...new Set([...placesByRecord.values()].flat())];
  const groups = groupPlacesByContinent(places, countryIndex.flags);
  const months = activitySeries(records, new Map(), 'cards');
  const values = rows => {
-  const byMonth = new Map(activitySeries(rows, new Map(), 'cards').map(point => [point.date,point]));
+  const byMonth = new Map(activitySeries(rows, ownership, metric).map(point => [point.date,point]));
   return months.map(month => ({...month, deal:byMonth.get(month.date)?.deal || 0, grant:byMonth.get(month.date)?.grant || 0, lawsuit:byMonth.get(month.date)?.lawsuit || 0}));
  };
  const regions = groups.map(group => {

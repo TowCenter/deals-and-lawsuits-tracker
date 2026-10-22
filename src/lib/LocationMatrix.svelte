@@ -1,11 +1,10 @@
 <script>
  import { buildLocationMatrix } from './locationMatrix.js';
- let {records = [], data = records, cutoff = $bindable(null)} = $props();
+ let {records = [], data = records, cutoff = $bindable(null), metric = $bindable('cards')} = $props();
  let expanded = $state(new Set());
- let category = $state('all');
  const kinds = [{key:'deal',label:'Deals',color:'#2e7d32'}, {key:'lawsuit',label:'Disputes',color:'#8b1a1a'}, {key:'grant',label:'Grants',color:'#1565c0'}];
- const visibleKinds = $derived(category === 'all' ? kinds : kinds.filter(kind=>kind.key === category));
- const matrix = $derived(buildLocationMatrix(records,data));
+ const visibleKinds = $derived(metric === 'reported' ? kinds.filter(kind=>kind.key !== 'grant') : kinds);
+ const matrix = $derived(buildLocationMatrix(records,data,metric));
  const rows = $derived(matrix.regions.flatMap(region => [
   {...region,key:region.label,continent:true},
   ...(expanded.has(region.label) ? region.countries.map(country=>({...country,key:`${region.label}:${country.key}`,continent:false})) : [])
@@ -28,7 +27,12 @@
 </script>
 <section class="location-matrix" aria-label="Activity by continent and country over time">
  <div class="matrix-controls">
-  <label>Show <select aria-label="Location matrix category" bind:value={category}><option value="all">Deals, disputes and grants</option>{#each kinds as kind}<option value={kind.key}>{kind.label}</option>{/each}</select></label>
+  <select aria-label="Chart counts" bind:value={metric}>
+   <option value="cards">Cards</option>
+   <option value="direct">Publishers — direct</option>
+   <option value="descendants">Publishers + children</option>
+   <option value="reported">Reported publisher counts</option>
+  </select>
   <button type="button" onclick={() => expanded = expanded.size ? new Set() : new Set(matrix.regions.map(region=>region.label))}>{expanded.size ? 'Collapse countries' : 'Expand countries'}</button>
   <button type="button" disabled={cutoff == null} onclick={() => cutoff=null}>All dates</button>
  </div>
@@ -52,13 +56,12 @@
     </div>
    {/each}
   </div>
-  <p>Monthly records by recorded location; grants count once per grant ID. Expand continents to see countries. Records spanning countries appear in each; continent totals count each record once. {#if matrix.undated}{matrix.undated} undated records excluded.{/if}</p>
+  <p>{metric === 'cards' ? 'Monthly records by recorded location; grants count once per grant ID.' : metric === 'reported' ? 'Reported totals, with direct-publisher fallback, for records tied to each location; totals are not apportioned among countries.' : 'Unique publishers per category and month for records tied to each location.'} Expand continents to see countries. Records spanning countries appear in each; continent totals count each record once. {#if matrix.undated}{matrix.undated} undated records excluded.{/if}</p>
  {:else}<p>No dated activity matches these filters.</p>{/if}
 </section>
 <style>
  .location-matrix { padding:.75rem 1rem; font-family:inherit; color:#333; font-size:.75rem; }
  .matrix-controls,.legend { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
- label { display:flex; gap:.4rem; align-items:center; }
  select,button { font:inherit; padding:.35rem .55rem; border:1px solid #ccc; border-radius:0; background:white; color:#254c6f; cursor:pointer; }
  button:disabled { opacity:.5; cursor:default; }
  button:focus-visible,select:focus-visible { outline:2px solid #DE5A35; outline-offset:1px; }
