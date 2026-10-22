@@ -36,7 +36,7 @@
   <button type="button" onclick={() => expanded = expanded.size ? new Set() : new Set(matrix.regions.map(region=>region.label))}>{expanded.size ? 'Collapse countries' : 'Expand countries'}</button>
   <button type="button" disabled={cutoff == null} onclick={() => cutoff=null}>All dates</button>
  </div>
- <div class="legend">{#each visibleKinds as kind}<span style:color={kind.color}>■ {kind.label}</span>{/each}<span>Darker = more activity · shared scale 0–{maximum}</span></div>
+ <div class="legend">{#each visibleKinds as kind}<span style:color={kind.color}>■ {kind.label}</span>{/each}</div>
  {#if matrix.months.length}
   <div class="matrix" role="table" aria-label="Monthly activity matrix" style:--months={matrix.months.length}>
    <div class="matrix-row month-header" role="row"><span class="place" role="columnheader">Location</span>{#each matrix.months as month}<span class="month" role="columnheader" aria-label={month.label}>{new Date(month.date+'T00:00:00Z').toLocaleDateString('en-US',{month:'short',timeZone:'UTC'})}</span>{/each}</div>
@@ -56,7 +56,7 @@
     </div>
    {/each}
   </div>
-  <p>{metric === 'cards' ? 'Monthly records by recorded location; grants count once per grant ID.' : metric === 'reported' ? 'Reported totals, with direct-publisher fallback, for records tied to each location; totals are not apportioned among countries.' : 'Unique publishers per category and month for records tied to each location.'} Expand continents to see countries. Records spanning countries appear in each; continent totals count each record once. {#if matrix.undated}{matrix.undated} undated records excluded.{/if}</p>
+
  {:else}<p>No dated activity matches these filters.</p>{/if}
 </section>
 <style>
