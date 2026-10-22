@@ -45,7 +45,7 @@
      {#each row.values as point}
       <div class="cell" class:selected={cutoff != null && point.date <= cutoff && point.end >= cutoff} role="cell">
        <button class="month-cell" type="button" aria-label={`${row.label}, ${point.label}: ${visibleKinds.map(kind=>`${kind.label} ${point[kind.key]}`).join(', ')}. Select month.`} onclick={()=>cutoff=point.end}>
-        {#each visibleKinds as kind}<span class="heat" style:background={point[kind.key] ? kind.color : '#ededed'} style:opacity={point[kind.key] ? .18+.82*point[kind.key]/maximum : 1}></span>{/each}
+        {#each visibleKinds as kind}<span class="heat" style:background={point[kind.key] ? `color-mix(in srgb, ${kind.color} ${18+82*point[kind.key]/maximum}%, white)` : '#ededed'} style:color={point[kind.key]/maximum > .65 ? 'white' : '#333'}>{point[kind.key] || ''}</span>{/each}
        </button>
       </div>
      {/each}
@@ -74,8 +74,8 @@
  .place-toggle { border:0; padding:.35rem 0; background:transparent; text-align:left; width:100%; }
  .cell { border-left:1px solid white; border-bottom:1px solid white; display:flex; min-width:0; }
  .cell.selected { outline:1px solid #DE5A35; outline-offset:-1px; }
- .month-cell { border:0; background:transparent; padding:3px 1px; display:flex; flex-direction:column; gap:2px; width:100%; min-width:0; min-height:30px; }
- .heat { display:block; flex:1; width:100%; min-height:4px; }
+ .month-cell { border:0; background:transparent; padding:3px 1px; display:flex; flex-direction:column; gap:2px; width:100%; min-width:0; min-height:45px; }
+ .heat { display:flex; align-items:center; justify-content:center; flex:1; width:100%; min-height:11px; font-size:.55rem; font-variant-numeric:tabular-nums; font-weight:500; line-height:1; }
  p { color:#777; font-size:.65rem; line-height:1.5; margin:.6rem 0 0; }
  @media(max-width:600px) { .location-matrix {padding:.65rem .5rem;} .matrix-row {grid-template-columns:95px repeat(var(--months),minmax(0,1fr));} .month {font-size:.5rem;} .month-cell {padding:3px 0;} }
 </style>
