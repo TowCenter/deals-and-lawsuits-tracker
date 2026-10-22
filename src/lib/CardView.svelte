@@ -66,6 +66,7 @@
 	 * @property {boolean} [showSharing=true] - Show sharing controls on main cards
 	 * @property {boolean} [showNetworks=true] - Show per-record network buttons
 	 * @property {Array<Object>} [data=[]] - Card data rows
+	 * @property {Array<number|string>|null} [subsetRecordIds=null] - Additional record selection
 	 * @property {string|null} [dateCutoff=null] - Inclusive date cutoff for cards
 	 * @property {Function} [onTimelineDataChange] - Matching records before the date cutoff
 	 * @property {string} [searchQuery=''] - Search query string
@@ -100,6 +101,7 @@
 		onFilteredDataChange = () => {},
         onTimelineDataChange = () => {},
         dateCutoff = null,
+        subsetRecordIds = null,
 		onAvailableValuesChange = () => {}
 	} = $props();
 
@@ -739,7 +741,8 @@
 	});
 
 	const matchingData = $derived(getFilteredAndSorted());
-    let filteredData = $derived(throughDate(matchingData, dateCutoff));
+    const selectedSubset = $derived(subsetRecordIds == null ? null : new Set(subsetRecordIds));
+    let filteredData = $derived(throughDate(matchingData, dateCutoff).filter(record => selectedSubset == null || selectedSubset.has(record.id)));
     $effect(() => { onTimelineDataChange(matchingData); });
 	let groupedData = $derived(groupByMonth(filteredData));
  $effect(() => {

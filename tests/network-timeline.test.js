@@ -26,11 +26,11 @@ test('publisher counts deduplicate across cards and include explicit grant benef
 });
 test('descendants propagate down two generations, never to siblings or ancestors', () => {
  assert.deepEqual(timelineSeries(rows.slice(0,1),graph,'descendants').map(point=>point.value),[3]);
- assert.deepEqual(timelineSeries([{date:'2024-01-01',organization_publisher_named_in_deal_suit:['Grandchild']}],graph,'descendants').map(point=>point.value),[2]);
+ assert.deepEqual(timelineSeries([{date:'2024-01-01',organization_publisher_named_in_deal_suit:['Grandchild'],parent_child_matches:rows[0].parent_child_matches}],graph,'descendants').map(point=>point.value),[2]);
 });
 test('ownership cycles do not inflate counts or loop forever', () => {
  const cycle = new Map([['parent',{children:new Set(['child'])}],['child',{children:new Set(['parent'])}]]);
- assert.equal(timelineSeries(rows.slice(0,1),cycle,'descendants')[0].value,2);
+ assert.equal(timelineSeries([{...rows[0],parent_child_matches:[{lineage:['Parent','Child','Parent']}]}],cycle,'descendants')[0].value,2);
  assert.deepEqual(timelineSeries([],cycle),[]);
 });
 
@@ -126,4 +126,19 @@ test('reported counts override direct fallback across updates without counting t
  assert.equal(events.length,1);
  assert.equal(events[0].reported_numbers,400);
  assert.equal(events[0].date,'2024-01-01');
+});
+
+
+test('children from other records never enter monthly or cumulative publisher counts', async () => {
+ const {activitySeries,cumulativeActivitySeries} = await import('../src/lib/networkTimeline.js');
+ for (const kind of ['Deal','Lawsuit','Grant']) {
+  const first={id:1,date:'2023-07-13',interaction:[kind],organization_publisher_named_in_deal_suit:['AP']};
+  const later={id:2,date:'2025-06-08',interaction:[kind],organization_publisher_named_in_deal_suit:['AP'],parent_child_matches:[{lineage:['AP','AP Business News']}]};
+  const records=[first,later], graph=buildOwnershipGraph(records);
+  assert.equal(timelineSeries([first],graph,'descendants')[0].value,1);
+  assert.equal(activitySeries(records,graph,'descendants')[0][kind.toLowerCase()],1);
+  const cumulative=cumulativeActivitySeries(records,graph,'descendants');
+  assert.equal(cumulative[0][kind.toLowerCase()],1);
+  assert.equal(cumulative.at(-1)[kind.toLowerCase()],2);
+ }
 });

@@ -2,6 +2,7 @@
  import {downloadJsonExport} from '../../../src/lib/csvExport.js';
     import LocationMatrix from '../../../src/lib/LocationMatrix.svelte';
     let activityView = $state('charts');
+    let matrixSelection = $state(null);
     import NetworkTimeline from '../../../src/lib/NetworkTimeline.svelte';
     import { buildOwnershipGraph } from '../../../src/lib/publisherNetwork.js';
     import { isMdlConsolidation } from '../../../src/lib/mdl.js';
@@ -247,7 +248,7 @@ Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> wit
             <NetworkTimeline records={homeRecords.filter(record => record.interaction.some(kind => /^(deal|lawsuit)$/i.test(kind)))} ownership={homeOwnership} cumulative bind:metric={chartMetric} showControls={false} bind:cutoff={homeCutoff} />
         </section>
         {:else}
-            <LocationMatrix records={homeRecords} data={partnerships} bind:metric={chartMetric} bind:cutoff={homeCutoff} />
+            <LocationMatrix onSelectionChange={(selection) => { matrixSelection = selection; }} records={homeRecords} data={partnerships} bind:metric={chartMetric} bind:cutoff={homeCutoff} />
         {/if}
         </div>
         <!-- Card View -->
@@ -257,6 +258,7 @@ Please contact <a href='mailto:kj2664@columbia.edu'>Klaudia Jaźwińska </a> wit
             showEntityNetworks={true}
             data={partnerships}
             dateCutoff={homeCutoff}
+            subsetRecordIds={activityView === 'locations' ? matrixSelection?.ids ?? null : null}
             onTimelineDataChange={(records) => { chartRecords = records; }}
             {searchQuery}
             {filterInteraction}

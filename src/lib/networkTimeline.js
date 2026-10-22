@@ -1,4 +1,4 @@
-import { connectionPublisherNames, normalizeName } from './publisherNetwork.js';
+import { buildOwnershipGraph, connectionPublisherNames, normalizeName } from './publisherNetwork.js';
 
 // Require a real calendar date; unknown dates must not silently become historical.
 export function timelineDate(value) {
@@ -38,6 +38,25 @@ export function reportedPublisherEvents(records) {
  return [...events.values()];
 }
 
+/** Expand only ownership lineages explicitly covered by this record. */
+export function coveredPublisherNames(record, metric = 'direct') {
+ const names = new Map(connectionPublisherNames(record).map(name => [normalizeName(name), name]));
+ if (metric !== 'descendants') return [...names.values()];
+ const graph = buildOwnershipGraph([record]);
+ const pending = [...names].map(([key]) => [key, 0]);
+ const visited = new Set();
+ while (pending.length) {
+  const [key, depth] = pending.shift();
+  if (visited.has(key)) continue;
+  visited.add(key);
+  if (depth < 2) for (const child of graph.get(key)?.children || []) {
+   names.set(child, graph.get(child).name);
+   pending.push([child, depth + 1]);
+  }
+ }
+ return [...names.values()];
+}
+
 export function timelineSeries(records, ownership, metric = 'cards') {
  const groups = new Map();
  for (const record of metric === 'reported' ? reportedPublisherEvents(records) : records) {
@@ -53,17 +72,7 @@ export function timelineSeries(records, ownership, metric = 'cards') {
   reported += rows.reduce((sum, row) => sum + (Number(row.reported_numbers) || 0), 0);
   if (metric !== 'cards' && metric !== 'reported') {
    for (const record of rows) {
-    const pending = connectionPublisherNames(record).map(name => [normalizeName(name), 0]);
-    const visited = new Map();
-    while (pending.length) {
-     const [key, depth] = pending.shift();
-     if (visited.has(key) && visited.get(key) <= depth) continue;
-     visited.set(key, depth);
-     publishers.add(key);
-     if (metric === 'descendants' && depth < 2) {
-      for (const child of ownership.get(key)?.children || []) pending.push([child, depth + 1]);
-     }
-    }
+    for (const name of coveredPublisherNames(record, metric)) publishers.add(normalizeName(name));
    }
   }
   return {date, value: metric === 'reported' ? reported : metric === 'cards' ? cards : publishers.size};
