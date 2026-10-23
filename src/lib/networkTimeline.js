@@ -59,7 +59,9 @@ export function coveredPublisherNames(record, metric = 'direct') {
 
 export function timelineSeries(records, ownership, metric = 'cards') {
  const groups = new Map();
- for (const record of metric === 'reported' ? reportedPublisherEvents(records) : records) {
+ const caseRows=records.filter(record=>(record.interaction||[]).some(kind=>/^lawsuit$/i.test(String(kind).trim())));
+ const counted=metric==='cards' ? [...records.filter(record=>!caseRows.includes(record)),...uniqueLawsuitEvents(caseRows)] : records;
+ for (const record of metric === 'reported' ? reportedPublisherEvents(records) : counted) {
   const date = timelineDate(record.date);
   if (!date) continue;
   if (!groups.has(date)) groups.set(date, []);
@@ -91,6 +93,16 @@ export function uniqueGrantEvents(records) {
  return [...grants.values()];
 }
 
+/** Count each explicit lawsuit ID once, at its earliest dated matching record. */
+export function uniqueLawsuitEvents(records) {
+ const cases = new Map();
+ for (const record of [...records].filter(record=>timelineDate(record.date)).sort((a,b)=>timelineDate(a.date).localeCompare(timelineDate(b.date)))) {
+  const ids=[...new Set([record.lawsuit_id,...(record.lawsuit_ids||[])].filter(value=>value!=null&&String(value).trim()).map(value=>String(value).trim()))];
+  for(const id of ids){const key=`lawsuit:${id}`;if(!cases.has(key))cases.set(key,record);}
+ }
+ return [...cases.values()];
+}
+
 /** Non-cumulative activity, including empty periods for honest comparisons. */
 export function activitySeries(records, ownership, metric = 'cards', interval = 'month', smooth = false) {
  const dated = records.filter(record => timelineDate(record.date));
@@ -104,6 +116,7 @@ export function activitySeries(records, ownership, metric = 'cards', interval = 
  const last = Math.max(...dated.map(record => +bucket(record.date)));
  const reportedEvents = metric === 'reported' ? reportedPublisherEvents(dated) : [];
  const grantEvents = uniqueGrantEvents(dated.filter(record => (record.interaction || []).some(kind => String(kind).trim().toLowerCase() === 'grant')));
+ const lawsuitEvents=uniqueLawsuitEvents(dated.filter(record=>(record.interaction||[]).some(kind=>/^lawsuit$/i.test(String(kind).trim()))));
  const points = [];
  for (let cursor = new Date(first); +cursor <= last; cursor.setUTCMonth(cursor.getUTCMonth() + step)) {
   const next = new Date(cursor);
@@ -114,7 +127,7 @@ export function activitySeries(records, ownership, metric = 'cards', interval = 
   const point = {date, end, label: step === 3 ? `${cursor.getUTCFullYear()} Q${Math.floor(cursor.getUTCMonth()/3)+1}` : date.slice(0,7)};
   for (const kind of ['deal', 'grant', 'lawsuit']) {
    const matching = rows.filter(record => (record.interaction || []).some(value => String(value).trim().toLowerCase() === kind));
-   point[kind] = metric === 'reported' ? reportedEvents.filter(record => timelineDate(record.date) >= date && timelineDate(record.date) <= end && (record.interaction || []).some(value => String(value).trim().toLowerCase() === kind)).reduce((sum,record) => sum + record.reported_numbers,0) : metric === 'cards' ? kind === 'grant' ? grantEvents.filter(record => timelineDate(record.date) >= date && timelineDate(record.date) <= end).length : matching.length : timelineSeries(matching, ownership, metric).at(-1)?.value || 0;
+   point[kind] = metric === 'reported' ? reportedEvents.filter(record => timelineDate(record.date) >= date && timelineDate(record.date) <= end && (record.interaction || []).some(value => String(value).trim().toLowerCase() === kind)).reduce((sum,record) => sum + record.reported_numbers,0) : metric === 'cards' ? kind === 'grant' ? grantEvents.filter(record => timelineDate(record.date) >= date && timelineDate(record.date) <= end).length : kind === 'lawsuit' ? lawsuitEvents.filter(record=>timelineDate(record.date)>=date&&timelineDate(record.date)<=end).length : matching.length : timelineSeries(matching, ownership, metric).at(-1)?.value || 0;
   }
   points.push(point);
  }

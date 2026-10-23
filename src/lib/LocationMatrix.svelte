@@ -1,7 +1,8 @@
 <script>
- import { buildLocationMatrix, matrixCellRecords } from './locationMatrix.js';
+ import { buildLocationMatrix, matrixCellRecords, locationPublishers } from './locationMatrix.js';
  let {records = [], data = records, cutoff = $bindable(null), metric = $bindable('cards'), onSelectionChange = () => {}} = $props();
  let legendCategory = $state(null);
+ let publisherCountry = $state(null);
  let locationView = $state('countries');
  let sortField = $state(null);
  let sortDirection = $state('desc');
@@ -35,6 +36,10 @@
   {...region,key:region.label,continent:true},
   ...(expanded.has(region.label) ? sorted(region.countries).map(country=>({...country,key:`${region.label}:${country.key}`,continent:false})) : [])
  ]));
+ const publisherRow = $derived(countryRows.find(row=>row.key===publisherCountry));
+ const publisherCell = $derived(selectedCell?.rowKey === publisherCountry ? selectedCell : null);
+ const publisherScope = $derived(publisherRow && publisherCell ? {...publisherRow, records:matrixCellRecords(publisherRow.records,publisherCell.start,publisherCell.end,publisherCell.kind,metric)} : publisherRow);
+ const publisherList = $derived(publisherScope ? locationPublishers(publisherScope,data,metric,publisherCell?.kind ?? legendCategory,cutoff) : []);
  const maximum = $derived(Math.max(1,...rows.flatMap(row=>row.values.flatMap(point=>visibleKinds.map(kind=>point[kind.key])))));
  const years = $derived.by(() => {
   const result=[];
@@ -89,7 +94,14 @@
    {#each rows as row (row.key)}
     <div class="matrix-row" class:continent={row.continent} role="row">
      <div class="place" class:country={!row.continent && locationView === 'continents'} role="rowheader">
-      {#if row.continent && row.countries.length}<button class="place-toggle" type="button" aria-expanded={expanded.has(row.label)} onclick={()=>toggle(row.label)}>{expanded.has(row.label)?'−':'+'} {row.label}</button>{:else}{row.label}{/if}
+      {#if row.continent && row.countries.length}<button class="place-toggle" type="button" aria-expanded={expanded.has(row.label)} onclick={()=>toggle(row.label)}>{expanded.has(row.label)?'−':'+'} {row.label}</button>{:else}<div class="country-publishers">
+       <button class="country-name" type="button" aria-expanded={publisherCountry===row.key} aria-label={`Show unique publishers in ${row.label}`} onclick={()=>publisherCountry=publisherCountry===row.key?null:row.key}>{row.label}</button>
+       {#if publisherCountry===row.key}<div class="publisher-popover" role="region" aria-label={`Publishers in ${row.label}`}>
+        <div class="publisher-heading"><strong>{row.label} · {publisherList.length} unique publishers</strong><button type="button" aria-label="Close publisher list" onclick={()=>publisherCountry=null}>×</button></div>
+        <p>{publisherCell ? `${publisherCell.month} · ${publisherCell.category}` : 'All matching months'}</p>
+        {#if publisherList.length}<ul>{#each publisherList as publisher}<li>{publisher}</li>{/each}</ul>{:else}<p>No named publishers with a recorded country match these filters.</p>{/if}
+       </div>{/if}
+      </div>{/if}
      </div>
      {#each row.values as point}
       <div class="cell" role="cell">
@@ -113,6 +125,12 @@
  {:else}<p>No dated activity matches these filters.</p>{/if}
 </section>
 <style>
+ .country-publishers { position:relative; width:100%; }
+ .country-name { border:0; padding:.25rem 0; text-align:left; background:transparent; color:inherit; text-decoration:underline dotted; text-underline-offset:3px; }
+ .publisher-popover { position:absolute; z-index:20; top:100%; left:0; width:280px; max-width:75vw; background:white; border:1px solid #ccc; box-shadow:0 3px 12px #0002; padding:.65rem; color:#333; font-weight:400; }
+ .publisher-heading { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+ .publisher-heading button { border:0; padding:.1rem .3rem; }
+ .publisher-popover ul { margin:.5rem 0 0; padding-left:1.1rem; max-height:220px; overflow-y:auto; line-height:1.6; }
  .location-matrix { padding:.75rem 1rem; font-family:inherit; color:#333; font-size:.75rem; }
  .selection-summary { display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; margin:.5rem 0; color:#254c6f; }
  .matrix-controls,.legend { display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; }
@@ -142,5 +160,11 @@
 
  .heat { border:0; border-radius:0; padding:0; display:flex; align-items:center; justify-content:center; flex:1; width:100%; min-height:11px; font-size:.55rem; font-variant-numeric:tabular-nums; font-weight:500; line-height:1; }
  p { color:#777; font-size:.65rem; line-height:1.5; margin:.6rem 0 0; }
- @media(max-width:600px) { .location-matrix {padding:.65rem .5rem;} .matrix-row {grid-template-columns:95px repeat(var(--months),minmax(0,1fr)) 42px;} .month {font-size:.5rem;} .cell {padding:3px 0;} }
+ @media(max-width:600px) { .country-publishers { position:relative; width:100%; }
+ .country-name { border:0; padding:.25rem 0; text-align:left; background:transparent; color:inherit; text-decoration:underline dotted; text-underline-offset:3px; }
+ .publisher-popover { position:absolute; z-index:20; top:100%; left:0; width:280px; max-width:75vw; background:white; border:1px solid #ccc; box-shadow:0 3px 12px #0002; padding:.65rem; color:#333; font-weight:400; }
+ .publisher-heading { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+ .publisher-heading button { border:0; padding:.1rem .3rem; }
+ .publisher-popover ul { margin:.5rem 0 0; padding-left:1.1rem; max-height:220px; overflow-y:auto; line-height:1.6; }
+ .location-matrix {padding:.65rem .5rem;} .matrix-row {grid-template-columns:95px repeat(var(--months),minmax(0,1fr)) 42px;} .month {font-size:.5rem;} .cell {padding:3px 0;} }
 </style>

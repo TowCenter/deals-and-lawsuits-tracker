@@ -1,5 +1,5 @@
 <script>
- import { throughDate } from './networkTimeline.js';
+ import {throughDate} from './networkTimeline.js';
  import {groupLegalComplaints} from './legalComplaints.js';
 	import { base } from '$app/paths';
  import { createGrantTimelineIndex } from './grantTimeline.js';
@@ -66,9 +66,6 @@
 	 * @property {boolean} [showSharing=true] - Show sharing controls on main cards
 	 * @property {boolean} [showNetworks=true] - Show per-record network buttons
 	 * @property {Array<Object>} [data=[]] - Card data rows
-	 * @property {Array<number|string>|null} [subsetRecordIds=null] - Additional record selection
-	 * @property {string|null} [dateCutoff=null] - Inclusive date cutoff for cards
-	 * @property {Function} [onTimelineDataChange] - Matching records before the date cutoff
 	 * @property {string} [searchQuery=''] - Search query string
 	 * @property {string[]} [filterInteraction=[]] - Filter by interactions
 	 * @property {string[]} [filterType=[]] - Filter by types
@@ -78,7 +75,10 @@
 	 * @property {boolean} [showCountries=false] - Show the country code beside every name
 	 * @property {string} [latestDate] - Latest tracker update date
 	 * @property {(data: Array<Object>) => void} [onFilteredDataChange=() => {}] - Callback when filtered data changes
-	 * @property {(values: Object<string, Set<string>>) => void} [onAvailableValuesChange=() => {}] - Callback with the values each filter can still return rows for
+	 * @property {string|null} [dateCutoff=null]
+ * @property {Array<number|string>|null} [subsetRecordIds=null]
+ * @property {(records: Array<Object>) => void} [onTimelineDataChange=() => {}]
+ * @property {(values: Object<string, Set<string>>) => void} [onAvailableValuesChange=() => {}] - Callback with the values each filter can still return rows for
 	 */
 
 	/** @type {Props} */
@@ -99,9 +99,9 @@
 		filterLocation = [],
 		showCountries = false,
 		onFilteredDataChange = () => {},
-        onTimelineDataChange = () => {},
         dateCutoff = null,
         subsetRecordIds = null,
+        onTimelineDataChange = () => {},
 		onAvailableValuesChange = () => {}
 	} = $props();
 
@@ -740,10 +740,10 @@
 		onAvailableValuesChange(availableValues);
 	});
 
-	const matchingData = $derived(getFilteredAndSorted());
-    const selectedSubset = $derived(subsetRecordIds == null ? null : new Set(subsetRecordIds));
-    let filteredData = $derived(throughDate(matchingData, dateCutoff).filter(record => selectedSubset == null || selectedSubset.has(record.id)));
-    $effect(() => { onTimelineDataChange(matchingData); });
+ const matchingData = $derived(getFilteredAndSorted());
+ const selectedSubset = $derived(subsetRecordIds == null ? null : new Set(subsetRecordIds));
+ let filteredData = $derived(throughDate(matchingData,dateCutoff).filter(record=>selectedSubset==null||selectedSubset.has(record.id)));
+ $effect(()=>onTimelineDataChange(matchingData));
 	let groupedData = $derived(groupByMonth(filteredData));
  $effect(() => {
   const target = focusedRecordIds == null && focusedRecordId == null && sharedCardId != null ? filteredData.find(row => String(row.id) === sharedCardId) : null;

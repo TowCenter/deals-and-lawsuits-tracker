@@ -52,7 +52,7 @@ test('activity counts categories independently, resets publishers and fills miss
 });
 test('activity crosses year and quarter boundaries and retains leap-day events', async () => {
  const {activitySeries} = await import('../src/lib/networkTimeline.js');
- const records = ['2023-12-31','2024-02-29','2024-04-01'].map(date=>({date,interaction:['Lawsuit']}));
+ const records = ['2023-12-31','2024-02-29','2024-04-01'].map(date=>({date,lawsuit_id:date,interaction:['Lawsuit']}));
  const activity = activitySeries(records,graph,'cards','quarter');
  assert.deepEqual(activity.map(row=>row.label),['2023 Q4','2024 Q1','2024 Q2']);
  assert.deepEqual(activity.map(row=>row.lawsuit),[1,1,1]);
@@ -141,4 +141,18 @@ test('children from other records never enter monthly or cumulative publisher co
   assert.equal(cumulative[0][kind.toLowerCase()],1);
   assert.equal(cumulative.at(-1)[kind.toLowerCase()],2);
  }
+});
+
+test('lawsuit updates count once per case ID in monthly and cumulative charts', async()=>{
+ const {activitySeries,cumulativeActivitySeries,uniqueLawsuitEvents}=await import('../src/lib/networkTimeline.js');
+ const records=[
+  {id:1,date:'2024-01-01',interaction:['Lawsuit'],lawsuit_id:'A'},
+  {id:2,date:'2024-02-01',interaction:['Lawsuit'],lawsuit_ids:['A']},
+  {id:3,date:'2024-02-10',interaction:['Lawsuit'],lawsuit_id:'B'},
+  {id:4,date:'2024-02-11',interaction:['Lawsuit']},
+  {id:5,date:null,interaction:['Lawsuit'],lawsuit_id:'B'}
+ ];
+ assert.equal(uniqueLawsuitEvents(records).length,2);
+ assert.deepEqual(activitySeries(records,new Map()).map(row=>row.lawsuit),[1,1]);
+ assert.deepEqual(cumulativeActivitySeries(records,new Map()).map(row=>row.lawsuit),[1,2]);
 });

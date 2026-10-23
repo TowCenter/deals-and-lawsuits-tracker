@@ -423,13 +423,13 @@ function lookupCountries(index, row, name) {
 	const rowMap = asPlainObject(row?.publication_countries);
 
 	// Display names are trimmed, the keys they came from may not be
-	const rowKey = Object.keys(rowMap).find(key => String(key).trim() === name);
+	const rowKey = Object.keys(rowMap).find(key => String(key).trim().toLowerCase() === name.toLowerCase());
 	if (rowKey !== undefined) {
 		const known = knownCountries(rowMap[rowKey], flags);
 		if (known.length > 0) return known;
 	}
 
-	return index?.publications?.get(name) || [];
+	return index?.publications?.get(name) || [...(index?.publications || [])].find(([key]) => String(key).trim().toLowerCase() === name.toLowerCase())?.[1] || [];
 }
 
 /**

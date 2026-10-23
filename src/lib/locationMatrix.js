@@ -1,6 +1,6 @@
 import { buildCountryIndex, getCountriesForName, getRowLocations, groupPlacesByContinent } from './utils.js';
 import { buildOwnershipGraph } from './publisherNetwork.js';
-import { coveredPublisherNames, activitySeries, timelineSeries, timelineDate, uniqueGrantEvents, reportedPublisherEvents } from './networkTimeline.js';
+import { coveredPublisherNames, activitySeries, timelineSeries, timelineDate, uniqueGrantEvents, uniqueLawsuitEvents, reportedPublisherEvents } from './networkTimeline.js';
 
 /** Attribute publishers individually; record metrics retain record geography. */
 export function buildLocationMatrix(records, allData = records, metric = 'cards') {
@@ -26,10 +26,10 @@ export function buildLocationMatrix(records, allData = records, metric = 'cards'
  };
  const totals = (rows, places) => Object.fromEntries(['deal','lawsuit','grant'].map(kind => {
   const matching = scoped(rows, places).filter(record=>timelineDate(record.date) && (record.interaction || []).some(value=>String(value).trim().toLowerCase()===kind));
-  const value = metric === 'cards' ? (kind === 'grant' ? uniqueGrantEvents(matching).length : matching.length) : metric === 'reported' ? reportedPublisherEvents(matching).reduce((sum,record)=>sum+record.reported_numbers,0) : timelineSeries(matching,ownership,countMetric).at(-1)?.value || 0;
+  const value = metric === 'cards' ? (kind === 'grant' ? uniqueGrantEvents(matching).length : kind === 'lawsuit' ? uniqueLawsuitEvents(matching).length : matching.length) : metric === 'reported' ? reportedPublisherEvents(matching).reduce((sum,record)=>sum+record.reported_numbers,0) : timelineSeries(matching,ownership,countMetric).at(-1)?.value || 0;
   return [kind,value];
  }));
- const makeRow = (label, selected, places) => ({label, records:selected, totals:totals(selected, places), values:values(selected, places)});
+ const makeRow = (label, selected, places) => ({label, places:[...places], records:selected, totals:totals(selected, places), values:values(selected, places)});
  const regions = groups.map(group => {
   const allPlaces = new Set([...group.options,...group.implied]);
   const selected = records.filter(record => placesByRecord.get(record).some(place => allPlaces.has(place)));
@@ -47,5 +47,27 @@ export function matrixCellRecords(records, start, end, kind, metric = 'cards') {
  let matching = records.filter(record => (record.interaction || []).some(value=>String(value).trim().toLowerCase()===kind));
  if (metric === 'reported') matching = reportedPublisherEvents(matching);
  else if (metric === 'cards' && kind === 'grant') matching = uniqueGrantEvents(matching);
+ else if (metric === 'cards' && kind === 'lawsuit') matching = uniqueLawsuitEvents(matching);
  return matching.filter(record => {const date=timelineDate(record.date);return date && date >= start && date <= end;});
+}
+
+
+/** Named publishers in this location, deduplicated across matching records. */
+export function locationPublishers(row, allData, metric = 'direct', category = null, cutoff = null) {
+ const index = buildCountryIndex(allData);
+ const places = new Set(row.places || []);
+ const names = new Map();
+ for (const record of row.records) {
+  const date = timelineDate(record.date);
+  if (!date || (cutoff && date > cutoff)) continue;
+  if (category && !(record.interaction || []).some(kind=>String(kind).trim().toLowerCase()===category)) continue;
+  for (const name of coveredPublisherNames(record, metric)) {
+   const countries = getCountriesForName(index, record, name);
+   if (countries.some(country=>places.has(country)) || (!countries.length && places.has(null))) {
+    const key = name.trim().toLowerCase();
+    if (!names.has(key)) names.set(key, name);
+   }
+  }
+ }
+ return [...names.values()].sort((a,b)=>a.localeCompare(b));
 }

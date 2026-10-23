@@ -49,7 +49,7 @@
   : selectedPublisher ? entries.filter(entry => connectionNodes(entry).some(node => selectedPublisherAncestors.has(node.key)))
   : selectedPlatform ? entries.filter(entry => entry.companies.includes(selectedPlatform))
   : focusedEntity || selectedKind ? entries : []);
- const panelRecords = $derived((selectedKind ? selectedRecords.filter(entry => kinds(entry).includes(selectedKind)) : selectedRecords).map(record => entries.find(entry => entry.id === record.id)).filter(Boolean));
+ const panelRecords = $derived(selectedKind ? selectedRecords.filter(entry => kinds(entry).includes(selectedKind)) : selectedRecords);
 
  let expanded = $state(false);
  let dialog;
@@ -254,7 +254,7 @@
  }
  const entries = $derived(networkEntries(viewRecords));
  const availableKinds = $derived(new Set(entries.flatMap(entry => (entry.interaction || []).map(value => String(value).toLowerCase()))));
- const companies = $derived(vennLayout ? vennLayout.nodes.filter(node=>node.key.startsWith('platform:')).map(node=>node.name) : focusedEntity?.type === 'platform' ? [focusedEntity.name] : [...new Set(entries.flatMap(entry => entry.companies))]);
+ const companies = $derived(vennLayout ? vennLayout.nodes.filter(node=>node.key.startsWith('platform:')).map(node=>node.name) : entityView?.companies || [...new Set(entries.flatMap(entry => entry.companies))]);
  const height = $derived(Math.max(650, Math.sqrt(hierarchy.nodes.length + companies.length) * 130));
  const platformRadius = $derived(Math.max(80, ...companies.map(name => name.length * 13 * .58 / 1.8 + 14)));
  const platformColumns = $derived(Math.max(1, Math.ceil(companies.length * (platformRadius * 2 + 24) / Math.max(1,height - 32))));
@@ -792,9 +792,7 @@
  .selected-record,dialog.expanded .selected-record { min-height:0; height:100%; max-height:100%; overflow:auto; scrollbar-width:none; position:relative; }
  .selected-record::-webkit-scrollbar { display:none; }
  @media (max-width:900px) {
-  .network-content,.network-content.has-selection { display:block; overflow:auto; }
-  .graph-column { height:390px; min-height:390px; }
-  .selected-record,dialog.expanded .selected-record { height:auto; max-height:none; overflow:visible; margin-top:1rem; }
+  .network-content.has-selection { grid-template-rows:minmax(0,1fr) minmax(0,.65fr); }
   .legend { margin-top:.5rem; }
   .network-branding { margin-top:.35rem; }
   .tow-watermark { width:120px; height:38px; }
